@@ -348,4 +348,79 @@
 
 \end{enumerate}
 
+\section{Лекция~\advancedConcurrencyNum: \advancedConcurrencyTopic}
+
+Ключевые понятия: \advancedConcurrencyKey
+
+\begin{enumerate}[\thesection .1]
+	
+	\item \mutexBasics
+
+	\globMemOverview
+
+	Test-and-test-and-set-lock. \textbf{Anderson Queue Lock}. Abortable locks: преимущества и сложности в реализации.
+
+	\commonProblems		
+
+	\item \mutexBasics
+
+	\globMemOverview
+
+	Test-and-test-and-set-lock. \textbf{CLH Lock}. Abortable locks: преимущества и сложности в реализации.
+
+	\commonProblems		
+
+
+	\item \mutexBasics
+
+	\globMemOverview
+
+	Test-and-test-and-set-lock. \textbf{MCS lock}. Abortable locks: преимущества и сложности в реализации.
+
+	\commonProblems		
+
+	\item \mutexBasics
+
+	\globMemOverview
+
+	Test-and-test-and-set-lock. Exponential backoff. \texttt{LockSupport.park, LockSupport.unpark}. \textbf{Spin-then-park}. Check-then-act.
+
+	\commonProblems		
+\end{enumerate}
+
+
+\section{Лекция~\userSpaceThreadingNum: \userSpaceThreadingTopic}
+
+Материал не выносится на экзамен 2025 года.
+
+% Ключевые понятия: \userSpaceThreadingKey
+% threading models
+% task pools vs long-run
+% task pools vs blocking
+% async IO
+% callback based programming
+% stackless stackful
+% 
+% \begin{enumerate}[\thesection .1]	
+% \item TODO
+% \end{enumerate}
+
+\section{Лекция~\concurrentQueuesNum: \concurrentQueuesNumTopic}
+
+Ключевые понятия: \concurrentQueuesNumKey
+
+\begin{enumerate}[\thesection .1]
+	
+	\item Многопоточные очереди, постановка задачи. Гарантии порядка (ordering), гарантии доставки (delivery), уровень конкурентности (SPSC, MPSC, SPMC, MPMC), ёмкость (bounded/unbounded).
+	Тотальные, частичные и синхронные методы.
+
+	\textbf{Unbounded MPMC linearizable total queue}.
+
+	\item Многопоточные очереди, постановка задачи. Гарантии порядка (ordering), гарантии доставки (delivery), уровень конкурентности (SPSC, MPSC, SPMC, MPMC), ёмкость (bounded/unbounded).
+	Тотальные, частичные и синхронные методы.
+
+	\textbf{Bounded array-based queues}. Примеры. Балансировки нагрузки (load balancing), подходы к решению (work arbitrage, work dealing, work stealing).
+
+\end{enumerate}
+
 \end{document}
