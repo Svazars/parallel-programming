@@ -42,11 +42,11 @@ Assume `main` thread `join`ed threads `A`, `B` and `C`. Use interleaving model f
 
 **Hint.** Proof of exhaustiveness could be structured in the following way:
 - Phase 1.
-  -- Prove that any tuple with `x=XXX where XXX > 100` is unreachable. Use the same technique for proof of impossibility as you used in task 1.2.
-  -- Prove that any tuple with `x=XXX where XXX < -100` is unreachable.
-  -- Do the same trick with `YYY` and `ZZZ` bounds.
+    - Prove that any tuple with `x=XXX where XXX > 100` is unreachable. Use the same technique for proof of impossibility as you used in task 1.2.
+    - Prove that any tuple with `x=XXX where XXX < -100` is unreachable.
+    - Do the same trick with `YYY` and `ZZZ` bounds.
 - Phase 2. Now you have a finite amount of "tuples with unknown status". 
-  -- Analyze them one-by-one and finish the proof of exhaustiveness.
+    - Analyze them one-by-one and finish the proof of exhaustiveness.
 
 **Hint inside hint**: better you choose the "impossibility" limits on phase 1, less tuples you have to analyze manually in phase 2.
 
