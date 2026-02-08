@@ -1,6 +1,7 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
+
 \title[]{Lecture \introNum: \introTopic}
 \subtitle[]{\introKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
@@ -9,9 +10,11 @@
 
 
 \newcommand{\taskExceptions}{1.1}
-\newcommand{\taskAmdhal}{1.2}
-\newcommand{\taskEmpire}{1.3}
-\newcommand{\taskJstack}{1.4}
+\newcommand{\taskInterleaveFirst}{1.2}
+\newcommand{\taskInterleaveSecond}{1.3}
+\newcommand{\taskAmdhal}{1.4}
+\newcommand{\taskEmpire}{1.5}
+\newcommand{\taskJstack}{1.6}
 
 \begin{document}
 
@@ -122,8 +125,6 @@
     \item May \textbf{fail} spuriously
 \end{itemize}
 
-
-%человечество использовало независимо существующие, но взаимодействующие между собой сущности с очень давних времен. В компьютерах просто таких сущностей очень много и взаимодействуют они с безумной частотой. Приходится натравливать другие компьютеры чтобы справляться (картинка битыв работов)
 \end{frame}
 
 
@@ -188,7 +189,7 @@ But worlds are \textit{different}:
 \begin{frame}[fragile]{Concurrency vs parallelism}
 \framesubtitle{Situations}
 
-Sequential and interruptible = concurrent\footnote{\tiny\url{https://go.dev/talks/2012/waza.slide#12}}
+Sequential and interruptible = concurrent\footnote{\tiny\url{https://go.dev/talks/2012/waza.slide##12}}
 
 \begin{center}
 \includegraphics[width=0.5\textwidth]{./pics/gopher_single.png}
@@ -196,7 +197,7 @@ Sequential and interruptible = concurrent\footnote{\tiny\url{https://go.dev/talk
 
 \pause
 
-Independent and simultaneous = parallel\footnote<2->{\tiny\url{https://go.dev/talks/2012/waza.slide#15}}
+Independent and simultaneous = parallel\footnote<2->{\tiny\url{https://go.dev/talks/2012/waza.slide##15}}
 
 \begin{center}
 \includegraphics[width=0.4\textwidth]{./pics/gopher_parallel.png}
@@ -207,7 +208,7 @@ Independent and simultaneous = parallel\footnote<2->{\tiny\url{https://go.dev/ta
 \begin{frame}[fragile]{Concurrency vs parallelism}
 \framesubtitle{Two sides of the same medal}
 
-Real life is mixed\footnote{\tiny\url{https://go.dev/talks/2012/waza.slide#22}}
+Real life is mixed\footnote{\tiny\url{https://go.dev/talks/2012/waza.slide##22}}
 
 \begin{center}
 \includegraphics[width=0.5\textwidth]{./pics/gopher_mixed.png}
@@ -285,9 +286,6 @@ Round-robin scheduling\footnote{\tiny\url{https://en.wikipedia.org/wiki/Round-ro
 \includegraphics[width=0.8\textwidth]{./pics/round_robin.png}
 \end{center}
 
-%Many core, many tasks
-%Example with bash, fork, wait and concurrent printing stuff on few-core cpu.
-
 \end{frame}
 
 
@@ -307,6 +305,155 @@ In computer science (and in our course)
 have more formal meaning than in ''usual'' communication. Be aware.
 
 \end{frame}
+
+\questiontime{Multitasking, time-sharing, preemption, round-robin. We are going to talk about ...}
+
+\begin{section}{Scheduler}
+\showTOC
+
+\begin{frame}[t]{Scheduler}
+\framesubtitle{Reminders}
+
+\begin{itemize}
+    \item Ivan Ugliansky, ''Scheduling: from FCFS to EEVDF'' {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf-extra/algo_plus_ose_schedulers.pdf}}
+
+    \item ''Operating Systems: Three Easy Pieces'', ''Scheduling: Introduction'' {\tiny\url{https://pages.cs.wisc.edu/\%7Eremzi/OSTEP/cpu-sched.pdf}}
+    
+    \item {\tiny\url{https://en.wikipedia.org/wiki/Process_(computing)}}
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Scheduler}
+\framesubtitle{Problem overview}
+
+\begin{center}
+\includegraphics[width=0.7\textwidth]{./pics/full_process_pic.png}
+\end{center}
+
+\end{frame}
+
+ 
+\begin{frame}[noframenumbering]{Scheduler}
+\framesubtitle{Problem overview}
+
+Scheduler -- magic black box
+\begin{itemize}
+    \item ''knows and owns'' every unit of scheduling (thread, process)
+    \item may pre-empt execution of any unit (save state from CPU to memory) 
+    \item may enable execution of any pending unit (load state from memory to CPU)
+    \item implements some scheduling policy (round-robin, shortest remaining time ...)
+\end{itemize}
+
+\pause
+
+Save state / load state == switch CPU context of execution
+
+\end{frame}
+
+\questiontime{What is context switch on modern OS (e.g. Linux) and modern hardware with MMU (e.g. x86\_64 intel Skylake)?}
+
+\begin{frame}{Scheduler}
+\framesubtitle{Context switch}
+
+Do not forget all the important data
+\begin{itemize}
+    \item registers (general-purpose, floating-point, other)
+    \item stack pointer
+    \item instruction pointer
+    \item segmentation/page tables
+    \item translation lookaside buffer flush
+    \item ...
+\end{itemize}
+
+Requires \texttt{user-space -> kernel space} transition.
+
+\pause
+Needs \textit{amortization}.
+
+\pause
+Scheduling quantum.
+
+\end{frame}
+
+
+\begin{frame}{Scheduler}
+\framesubtitle{Scheduling quantum}
+
+Quantum may be arbitrary function of \texttt{(current task, other tasks, state of OS)}.
+
+Do not forget about
+\begin{itemize}
+    \item frequency of context switches
+    \item ''price'' of context switch
+    \item thread/process priority    
+    \item ''price'' of CPU migration 
+    \item occupation of other processors
+    \item ...
+\end{itemize}
+
+It is hard to trust timings\footnote{\url{https://shipilev.net/blog/2014/notrusting-nanotime}}\textsuperscript{,}\footnote{\url{https://pzemtsov.github.io/2017/07/23/the-slow-currenttimemillis.html}}.
+
+\end{frame}
+
+\begin{frame}{Scheduler}
+\framesubtitle{Pre-emptive and cooperative multitasking}
+
+When to context switch?
+\pause
+\newline
+
+\begin{tabular}{p{8cm}p{5cm}}
+
+    Anytime anywhere:
+    \begin{itemize}
+        \item flexible
+        \item easy-to-use model
+        \item requires additional care
+        \item has counter-examples
+        \item relies on heuristics
+    \end{itemize}
+
+ &     
+    When allowed to:
+    \begin{itemize}
+        \item fine-grained control
+        \item nontrivial behaviour
+        \item requires additional care
+        \item has counter-examples
+        \item relies on heuristics
+    \end{itemize}
+\end{tabular}
+
+\pause
+
+In real environments it is \textbit{always} a hybrid solution\footnote<3->{The long road to lazy preemption: \url{https://lwn.net/Articles/994322/}}.
+
+\end{frame}
+
+\begin{frame}{Scheduler}
+\framesubtitle{Goals}
+
+\begin{itemize}
+    \item In theory, there exist a \textit{perfect} schedule
+    \item In practice, almost any scheduling problem is NP-complete
+    \item In applications, workload is dynamically generated on-the-fly
+\end{itemize}
+
+\pause
+
+Realistic goals:
+\begin{itemize}
+    \item Max \textit{utilization}, not max \textit{efficiency}
+    \item Reasonable \textit{latency}
+    \item Soft/hard \textit{real-time} constraints
+    \item \textit{Energy efficiency}
+\end{itemize}
+\end{frame}
+ 
+\questiontime{Describe situation when \textit{max utilization} scheduling contradicts \textit{max efficiency} scheduling}
+ 
+\questiontime{OS scheduler schedules \textbf{what}? Scheduler manages which OS \textbf{resource}?}
 
 \begin{section}{Threads and processes}
 \showTOC
@@ -341,7 +488,6 @@ Thread\footnote{\tiny\url{https://en.wikipedia.org/wiki/Thread_(computing)}}
     \item \textbf{shares} memory with other threads
 \end{itemize}
 \end{frame}
-
 
 \begin{frame}[t]{Threads vs processes}
 \framesubtitle{Bird-eye view}
@@ -416,119 +562,141 @@ sys     0m 1,084s
 
 \end{frame}
 
-\begin{frame}[fragile]{Threads vs processes}
-\framesubtitle{Examples: pthreads\footnote{POSIX threads: \url{https://en.wikipedia.org/wiki/Pthreads}}.}
-
-\textbf{Step 1.} Define and allocate utility struct
-
-\begin{minted}{c}
-  struct thread_info {    /* Used as argument to thread_start() */
-    pthread_t thread_id;  /* ID returned by pthread_create() */
-    int       thread_num; /* Application-defined thread # */
-  };
-
-  struct thread_info * tinfo_a = malloc(sizeof(struct thread_info));
-  if (tinfo_a == NULL) handle_error("malloc");
-\end{minted}
-\end{frame}
-
-
-\begin{frame}[fragile,noframenumbering]{Threads vs processes}
-\framesubtitle{Examples: pthreads}
-
-\textbf{Step 2.} Initialize thread attributes
-\begin{minted}{c}
-  pthread_attr_t attr;
-  s = pthread_attr_init(&attr);
-  if (s != 0) handle_error("pthread_attr_init");
-\end{minted}
-
-
-\textbf{Step 3.} Define thread body
-\begin{minted}{c}
-  static void * thread_A_start(void *arg) {
-    struct thread_info *tinfo = arg;
-    printf("Thread A id = %d: hello world!\n", tinfo->thread_num);
-    return NULL;
-  }
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Threads vs processes}
-\framesubtitle{Examples: pthreads}
-
-\textbf{Step 4.} Initialize utility struct and start new thread
-\begin{minted}{c}
-  tinfo_a->thread_num = 1;
-  s = pthread_create(&(tinfo_a->thread_id), &attr, &thread_A_start, tinfo_a);
-  if (s != 0) handle_error("pthread_create");
-\end{minted}
-
-\textbf{Step 5.} Join thread
-\begin{minted}{c}
-  void *res;
-  s = pthread_join(tinfo_a->thread_id, &res);
-  if (s != 0) handle_error("pthread_join");
-  printf("Joined with thread A, result= %p\n", (char *) res);
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Threads vs processes}
-\framesubtitle{Examples: pthreads}
-
-\begin{tabular}{p{5cm}p{5cm}}
-
-\begin{minted}{c}
-  struct thread_info {
-    pthread_t thread_id;
-    int       thread_num;
-  };
-\end{minted}
- & 
-\begin{minted}{c}
-  static void * thread_A_start(void *arg) {
-    struct thread_info *tinfo = arg;
-    printf("Thread A id = %d: hello world!\n", 
-      tinfo->thread_num);
-    return NULL;
-  }
-\end{minted}
-\end{tabular}
-
-\begin{minted}{c}
-  // ...
-  tinfo_a->thread_num = 1;
-  pthread_create(&(tinfo_a->thread_id), &attr, &thread_A_start, tinfo_a);
-  pthread_join(tinfo_a->thread_id, &res);
-  printf("Joined with thread A, result= %p\n", (char *) res);
-\end{minted}
-
-\end{frame}
+% % \begin{frame}[fragile]{Threads vs processes}
+% % \framesubtitle{Examples: pthreads\footnote{POSIX threads: \url{https://en.wikipedia.org/wiki/Pthreads}}.}
+% % 
+% % \textbf{Step 1.} Define and allocate utility struct
+% % 
+% % \begin{minted}{c}
+% %   struct thread_info {    /* Used as argument to thread_start() */
+% %     pthread_t thread_id;  /* ID returned by pthread_create() */
+% %     int       thread_num; /* Application-defined thread # */
+% %   };
+% % 
+% %   struct thread_info * tinfo_a = malloc(sizeof(struct thread_info));
+% %   if (tinfo_a == NULL) handle_error("malloc");
+% % \end{minted}
+% % \end{frame}
+% % 
+% % 
+% % \begin{frame}[fragile,noframenumbering]{Threads vs processes}
+% % \framesubtitle{Examples: pthreads}
+% % 
+% % \textbf{Step 2.} Initialize thread attributes
+% % \begin{minted}{c}
+% %   pthread_attr_t attr;
+% %   s = pthread_attr_init(&attr);
+% %   if (s != 0) handle_error("pthread_attr_init");
+% % \end{minted}
+% % 
+% % 
+% % \textbf{Step 3.} Define thread body
+% % \begin{minted}{c}
+% %   static void * thread_A_start(void *arg) {
+% %     struct thread_info *tinfo = arg;
+% %     printf("Thread A id = %d: hello world!\n", tinfo->thread_num);
+% %     return NULL;
+% %   }
+% % \end{minted}
+% % \end{frame}
+% % 
+% % \begin{frame}[fragile,noframenumbering]{Threads vs processes}
+% % \framesubtitle{Examples: pthreads}
+% % 
+% % \textbf{Step 4.} Initialize utility struct and start new thread
+% % \begin{minted}{c}
+% %   tinfo_a->thread_num = 1;
+% %   s = pthread_create(&(tinfo_a->thread_id), &attr, &thread_A_start, tinfo_a);
+% %   if (s != 0) handle_error("pthread_create");
+% % \end{minted}
+% % 
+% % \textbf{Step 5.} Join thread
+% % \begin{minted}{c}
+% %   void *res;
+% %   s = pthread_join(tinfo_a->thread_id, &res);
+% %   if (s != 0) handle_error("pthread_join");
+% %   printf("Joined with thread A, result= %p\n", (char *) res);
+% % \end{minted}
+% % \end{frame}
+% % 
+% % \begin{frame}[fragile,noframenumbering]{Threads vs processes}
+% % \framesubtitle{Examples: pthreads}
+% % 
+% % \begin{tabular}{p{5cm}p{5cm}}
+% % 
+% % \begin{minted}{c}
+% %   struct thread_info {
+% %     pthread_t thread_id;
+% %     int       thread_num;
+% %   };
+% % \end{minted}
+% %  & 
+% % \begin{minted}{c}
+% %   static void * thread_A_start(void *arg) {
+% %     struct thread_info *tinfo = arg;
+% %     printf("Thread A id = %d: hello world!\n", 
+% %       tinfo->thread_num);
+% %     return NULL;
+% %   }
+% % \end{minted}
+% % \end{tabular}
+% % 
+% % \begin{minted}{c}
+% %   // ...
+% %   tinfo_a->thread_num = 1;
+% %   pthread_create(&(tinfo_a->thread_id), &attr, &thread_A_start, tinfo_a);
+% %   pthread_join(tinfo_a->thread_id, &res);
+% %   printf("Joined with thread A, result= %p\n", (char *) res);
+% % \end{minted}
+% % 
+% % \end{frame}
 
 
 \begin{frame}[fragile]{Threads vs processes}
 \framesubtitle{Examples: Java threads}
 
 \begin{minted}{java}
-static class ThreadA extends Thread {
-    private int idx;        
-    ThreadA(int i) { this.idx = i; }
-    @Override
-    public void run() {
-        System.out.printf("Thread A, idx = %d: hello world\n", this.idx);
-    }
-}
+static long a, b;
+static class MyThread extends Thread {
+    private int idx; MyThread(int i) { this.idx = i; }
+    @Override public void run() {
+        for (long i = 0; i < 500_000; i++) {
+            if (idx == 1) { a += func(i); } 
+            else          { b += func(i + 500_000); }
+    }}}
 public static void main(String... args) throws Exception {
-    Thread t = new ThreadA(1);
-    t.start(); // !!! not t.run !!!
-    t.join();
+    Thread t1 = new MyThread(1); Thread t2 = new MyThread(2);
+    t1.start(); t2.start(); // !!! not t1.run() !!!
+    t1.join(); t2.join();
+    System.out.println("Result = " + (a + b));
 }
 \end{minted}
 \end{frame}
 
-\questiontime{Why somebody would use Java for parallel programming course, not C or C++?}
 
-\begin{frame}[fragile]{Java threads and exceptions}
+\begin{frame}[fragile]{Your first homework}
+
+\pause
+Read the docs
+\begin{itemize}
+    \item \tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html}
+    \item \tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#start()}
+    \item \tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#join()}
+\end{itemize}
+
+\pause Yes, we use JDK 11 for all homeworks. \pause Yes, in \the\year{}.
+
+\pause \item Anytime you see \texttt{javase.docs} URL on the lecture slides
+\begin{itemize}
+    \pause \item I am free to ask you about corresponding Java API during the exam        
+\end{itemize}
+
+\pause
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.1/readme.markdown}}
+\begin{homeworkmail}{Task \taskExceptions}
+    Create 3 Java programs for the following cases, explain results in several sentences.
+}
+\end{homeworkmail}
 
 Thread \textbf{A} starts thread \textbf{B} and \texttt{join}s. Uncaught exception happens in thread \textbf{B}. 
 
@@ -538,23 +706,9 @@ Thread \textbf{A} starts thread \textbf{B} and \texttt{join}s. Uncaught exceptio
     \item What if thread \textbf{C} \texttt{join}s thread \textbf{B} \textit{after} exception happened?
     \item What if thread \textbf{D} \texttt{join}s thread \textbf{A}?
 \end{itemize}
-
-\pause
-
-\begin{homeworkmail}{Task \taskExceptions}
-    Create 3 Java programs for these cases, explain results in several sentences.
-}
-\end{homeworkmail}
-
 \end{frame}
 
-
-%\begin{frame}{Threads vs processes}
-%\framesubtitle{More serious}
-%Строгое определение процесса и потока из Таненбаума.
-%Более формальная задача планирования, аливерды в теорию расписаний, пометка про динамическую суть задачи.
-%\end{frame}
-
+\questiontime{Why would somebody use Java for parallel programming course, not C or C++?}
 
 \begin{frame}{Threads vs processes}
 \framesubtitle{Conclusion}
@@ -576,388 +730,485 @@ Almost all lectures will be about
 \end{itemize}
 \end{frame}
 
-\begin{section}{Scheduler}
+
+\begin{section}{Multitasking and threading models}
 \showTOC
 
-\begin{frame}{Scheduler}
-\framesubtitle{Problem overview}
+\begin{frame}[t]{Threading models}
 
-{\tiny\url{https://en.wikipedia.org/wiki/Process_(computing)#/media/File:Concepts-_Program_vs._Process_vs._Thread.jpg}}
-
-\begin{center}
-\includegraphics[width=0.6\textwidth]{./pics/full_process_pic.png}
-\end{center}
-
-
-\end{frame}
-
-\begin{frame}[noframenumbering]{Scheduler}
-\framesubtitle{Problem overview}
-
-Scheduler -- magic black box
+1:1 model
 \begin{itemize}
-    \item ''knows and owns'' every unit of scheduling (thread)
-    \item may pre-empt execution of any unit (save state from CPU to memory) 
-    \item may enable execution of any pending unit (load state from memory to CPU)
-    \item implements some scheduling policy (round-robin, shortest remaining time ...)
-\end{itemize}
-
-\pause
-
-Save state / load state == switch CPU context of execution
-
-\end{frame}
-
-\questiontime{What is context switch on modern OS (e.g. Linux) and modern hardware with MMU (e.g. x86\_64 intel Skylake)?}
-
-\begin{frame}{Scheduler}
-\framesubtitle{Context switch}
-
-Do not forget all the important data
-\begin{itemize}
-    \item registers (general-purpose, floating-point, other)
-    \item stack pointer
-    \item instruction pointer
-    \item segmentation/page tables
-    \item translation lookaside buffer flush
-    \item ...
-\end{itemize}
-
-Requires user-space -> kernel space transition.
-
-\pause
-Needs \textit{amortization}.
-
-\pause
-Scheduling quantum.
-
-\end{frame}
-
-
-\begin{frame}{Scheduler}
-\framesubtitle{Scheduling quantum}
-
-Quantum may be arbitrary function of \texttt{(current task, other tasks, state of OS)}.
-
-Do not forget about
-\begin{itemize}
-    \item frequency of context switches
-    \item ''price'' of context switch
-    \item thread priority
-    \item process priority
-    \item ''price'' of CPU migration 
-    \item occupation of other processors
-    \item ...
-\end{itemize}
-
-It is hard to trust timings\footnote{\url{https://shipilev.net/blog/2014/nanotrusting-nanotime}}\footnote{\url{https://pzemtsov.github.io/2017/07/23/the-slow-currenttimemillis.html}}.
-
-\end{frame}
-
-\begin{frame}{Scheduler}
-\framesubtitle{Pre-emptive and cooperative multitasking}
-
-When to context switch?
-
-\begin{tabular}{p{8cm}p{5cm}}
-
-    Anytime anywhere:
+    \item \texttt{N} preemptible tasks
+    \item Every task is allocated on designated computing agent
+    \pause
+    \item Examples:
+    \pause
     \begin{itemize}
-        \item flexible
-        \item easy-to-use model
-        \item requires additional care
-        \item has counter-examples
-        \item relies on heuristics
+        \item 1 Java thread -- 1 OS thread
+        \item 1 OS thread -- 1 CPU        
+    \end{itemize}
+\end{itemize}
+
+\pause
+
+N:1 model
+\begin{itemize}
+    \item \texttt{N} preemptible tasks
+    \item Single executor
+\end{itemize}
+
+\pause
+
+N:M model
+\begin{itemize}
+    \item \texttt{N} preemptible tasks
+    \item Multiplexed over \texttt{M} computing agents. (\texttt{1 < M < N})
+    \pause
+    \item Examples:
+    \pause
+    \begin{itemize}
+        \item thread pools (Lecture~\syncPrimitivesNum)
+        \item green threads, coroutines (Lecture~\userSpaceThreadingNum)                
+    \end{itemize}    
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[t]{N:1 threading model}
+
+N:1 threading model
+\begin{itemize}
+    \item \texttt{N} preemptible tasks
+    \item Single executor
+\end{itemize}
+
+\pause
+Single-core OS
+\begin{itemize}
+    \item \texttt{N} running processes
+    \item Single CPU
+\end{itemize}
+
+\pause
+Classic JVM run on single-core hardware
+\begin{itemize}
+    \item \texttt{N} running Java threads
+    \item Each Java thread mapped to corresponding OS thread (\texttt{1:1})
+    \item OS threads run on single CPU (\texttt{N:1})
+\end{itemize}
+
+\pause
+Useful \textbf{model} for discussing possible behaviours of concurrent programs
+
+\end{frame}
+
+
+\begin{frame}[t]{Threading model: not enough}
+
+N:1 threading model
+\begin{itemize}
+    \item \texttt{N} preemptible tasks
+    \item Single executor    
+\end{itemize}
+
+\pause
+Describes allocation of computing resources.
+
+\pause
+What about interaction between tasks? 
+
+\pause
+Need additional information
+\begin{itemize}
+    \item guarantees to memory update visibility?
+    \item expectations about scheduling policy?
+    \item cross-thread interactions ordering?
+\end{itemize}
+\end{frame}
+
+\begin{frame}[t]{Interleaving model}
+
+N:1 threading model
+\begin{itemize}
+    \item \texttt{N} preemptible tasks
+    \item Single executor    
+\end{itemize}
+
+\pause
+Preemption could happen
+\begin{itemize}
+    \item At any place (any machine instruction)
+    \item At any time (every femtosecond)
+    \item For arbitrary long time (undefined scheduling policy)
+\end{itemize}        
+
+\pause
+\textit{Executed} instructions instantly affect whole computing system
+\begin{itemize}
+    \item All subsequent instructions see up-to-date memory state
+    \item All threads observe the same up-to-date memory state
+    \item All events are totally ordered on a timeline
+\end{itemize}        
+
+\pause
+This is \textbf{simplified} model of concurrent execution. We will use it up to Lecture~\foundationsNum.
+
+\end{frame}
+
+\questiontime{What is the difference between \texttt{N:1} threading model and describing concurrent system using \texttt{interleavings}?}
+
+\input{parts/execution_trace_workers.tex}
+
+\begin{frame}{Interleaving model: key concepts}
+
+Concurrent execution trace:
+\begin{itemize}
+    \item All operations inside thread ordered sequentially
+    \item All operations across all threads are totally ordered on timeline
+    \item Single deterministic result of execution    
+\end{itemize}
+
+Non-determinism:
+\begin{itemize}
+    \item Concurrent program may have \textbf{many} execution traces.
+    \item Concurrent program may have \textbf{many} results of execution.
+\end{itemize}
+
+\end{frame}
+
+\questiontime{single-threaded program that have many execution traces?}
+\questiontime{concurrent program with many execution traces but only one result of execution?}
+\questiontime{concurrent program with infinite number of execution traces?}
+
+\begin{frame}[fragile]{Interleaving model: homework}
+
+\begin{homeworkmail}{Task \taskInterleaveFirst.}
+    For given multithreaded program and execution result provide either 
+    \begin{itemize}
+        \item concurrent execution trace (\texttt{A.1->A.2->B.1 ...}) or 
+        \item proof of impossibility
+    \end{itemize}
+}
+\end{homeworkmail}
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.2/readme.markdown}}
+
+\newline
+\begin{homeworkmail}{Task \taskInterleaveSecond.}
+    For given multithreaded program:
+    \begin{itemize}
+        \item provide all possible execution results
+        \item provide only one execution trace per result
+        \item prove exhaustiveness of your answer
+    \end{itemize}   
+}
+\end{homeworkmail}
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.3/readme.markdown}}
+
+\end{frame}
+
+
+\begin{frame}[t]{Our main enemy through the course}
+
+\pause
+Non-determinism\pause: concurrent program may have \textbf{many} execution traces.    
+
+\begin{itemize}
+    \pause \item Hard to reason about all possible memory states
+    \pause \item Hard to define and guarantee program invariants
+    \pause \item Hard to reproduce erroneous behavior
+    \pause \item Hard to verify concurrent bug is fixed
+    \pause \item Hard to prove correctness
+\end{itemize}
+
+\pause
+Solution: \pause study hard!
+\begin{itemize} 
+    \pause \item Write and debug concurrent programs (Lectures~\basicNum-\extraBasicsNum)
+    \pause \item Use formalization for concurrent execution (Lectures~\foundationsNum-\atomicsNum)
+    \pause \item Go to hardware-level (Lecture~\cacheCoherencyNum)
+    \pause \item Go to semantic level (Lecture~\langMMNum)
+    \pause \item ... and beyond  (Lectures~\advancedConcurrencyNum+)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Concurrency: tips and tricks}
+
+\begin{itemize}
+    \pause \item If concurrent tests pass on your local machine
+    \begin{itemize}
+        \pause \item no guarantee your program is correct.
     \end{itemize}
 
- &     
-    When allowed to:
+    \pause \item If some concurrent test fails
     \begin{itemize}
-        \item fine-grained control
-        \item nontrivial behaviour
-        \item requires additional care
-        \item has counter-examples
-        \item relies on heuristics
+        \pause \item maybe there is a bug in test itself.
     \end{itemize}
-\end{tabular}
 
-\pause
+    \pause \item If interleaving model explains a bug
+    \begin{itemize}
+        \pause \item you must fix it. \pause \textbf{Always}.
+    \end{itemize}
 
-In real environments it is \textbit{always} a hybrid solution\footnote<2->{The long road to lazy preemption: \url{https://lwn.net/Articles/994322/}}.
-
-\end{frame}
-
-\begin{frame}{Scheduler}
-\framesubtitle{Goals}
-
-\begin{itemize}
-    \item In theory, there exist a \textit{perfect} schedule
-    \item In practice, almost any scheduling problem is NP-complete
-    \item In applications, workload is dynamically generated on-the-fly
-\end{itemize}
-
-\pause
-
-Realistic goals:
-\begin{itemize}
-    \item Max \textit{utilization}, not max \textit{efficiency}
-    \item Reasonable \textit{latency}
-    \item Soft/hard \textit{real-time} constraints
-    \item \textit{Energy efficiency}
+    \pause \item If interleaving model proves correctness of your program
+    \begin{itemize}
+        \pause \item still run stress-tests.
+    \end{itemize}
 \end{itemize}
 \end{frame}
 
-\questiontime{Describe situation when \textit{max utilization} scheduling contradicts \textit{max efficiency} scheduling}
+
 
 \begin{section}{Concurrent problems}
 \showTOC
-
-
-\begin{frame}{Concurrent blocks you know so far}
-
-\begin{enumerate}
-    \item Create new thread
-    \item Modify fields concurrently
-    \item Join thread
-\end{enumerate}
-
-\pause 
-Combining \textbf{1} and \textbf{2}:
-\begin{itemize}
-    \item Solve ''easy'' parallel problems
-    \item Encounter logic errors (race conditions)
-    \item Encounter concurrent memory access effects (data races)
-\end{itemize}
-
-\pause 
-Using \textbf{3}:
-\begin{itemize}
-    \item Encounter visibility bugs (stale value)
-    \item Encounter no-progress blocking (deadlock)
-    \item Observe slow-progress issues (priority inversion) 
-\end{itemize}
-
-\end{frame}
-
-
-\begin{subsection}{Embarrassingly parallel problems and Amdahl's law}
-\showTOCSub
-
-\begin{frame}{Embarrassingly parallel problems}
-\framesubtitle{Introduction}
-
-\begin{itemize}
-        \item Embarrassingly parallel
-        \item Embarrassingly parallelizable
-        \item Perfectly parallel
-        \item Delightfully parallel
-        \item Pleasingly parallel
-\end{itemize}
-
-Key properties:
-\begin{itemize}
-        \item Granularity
-        \item Minimal coordination
-\end{itemize}
-\end{frame}
-
-\questiontime{Any ideas for embarrassingly parallel problems?}
-
-\begin{frame}{Embarrassingly parallel problems}
-\framesubtitle{Examples}
-
-\begin{itemize}
-    \item function applied to collection of items (\textit{map})
-    \begin{itemize}
-        \item ray tracing
-        \item word count in independent files
-        \item proof-of-work crypto
-        \item bioinformatics search (BLAST etc)
-        \item Discrete Fourier transform
-    \end{itemize}
-
-    \item associative operation applied to large array (order-independent \textit{reduce})
-    \begin{itemize}
-        \item sum of elements in integer array
-        \item word count for all books in e-library    
-    \end{itemize}
-
-    \item ...
-\end{itemize}
-\end{frame}
-
-
-\begin{frame}[fragile]{Amdahl's law}
-\framesubtitle{Key ideas}
-
-Any problem consists of \textit{serial} part and \textit{parallel} part.
-
-Speed-up of parallel part depends on computational resources. Serial part is ''fixed work''.
-
-\begin{itemize}
-    \item \textbf{Diminishing Returns}: beyond certain point, adding more processors doesn't significantly increase speedup
-    \item \textbf{Limited Speedup}: problem cannot be solved faster than serial part
-\end{itemize}
-
-{\tiny\url{https://en.wikipedia.org/wiki/Amdahl%27s_law}}
-\begin{center}
-\includegraphics[width=0.3\textwidth]{./pics/amdahl.png}
-\end{center}
-\end{frame}
-
-\begin{frame}[fragile]{Amdahl's law}
-\framesubtitle{Examples}
-
-\begin{itemize}
+ 
+ \begin{frame}{Concurrent building blocks you know so far}
+ 
+ \begin{enumerate}
+     \item Create new thread and \texttt{start} it
+     \item Modify fields concurrently
+     \item \texttt{Join} thread
+ \end{enumerate}
+ 
+ \pause 
+ Combining \textbf{1} and \textbf{2}:
+ \begin{itemize}
+     \item Solve ''easy'' parallel problems
+     \item Encounter logic errors (race conditions)
+     \item Encounter concurrent memory access effects (data races)
+ \end{itemize}
+ 
+ \pause 
+ Using \textbf{3}:
+ \begin{itemize}
+     \item Encounter visibility bugs (stale value)
+     \item Encounter no-progress blocking (deadlock)
+     \item Observe slow-progress issues (priority inversion) 
+ \end{itemize}
+ 
+ \end{frame}
+ 
+ 
+ \begin{subsection}{Embarrassingly parallel problems and Amdahl's law}
+ \showTOCSub
+ 
+ \begin{frame}{Embarrassingly parallel problems}
+ \framesubtitle{Introduction}
+ 
+ Synonyms:
+ \begin{itemize}
+         \item Embarrassingly parallel
+         \item Embarrassingly parallelizable
+         \item Perfectly parallel
+         \item Delightfully parallel
+         \item Pleasingly parallel
+ \end{itemize}
+ 
+ Key properties:
+ \begin{itemize}
+         \item Granularity
+         \item Minimal coordination
+ \end{itemize}
+ \end{frame}
+ 
+ \questiontime{Any ideas for embarrassingly parallel problems?}
+ 
+ \begin{frame}{Embarrassingly parallel problems}
+ \framesubtitle{Examples}
+ 
+ \begin{itemize}
+     \item function applied to collection of items (\textit{map})
+     \begin{itemize}
+         \item ray tracing
+         \item word count in independent files
+         \item proof-of-work cryptocurrency
+         \item bioinformatics search (BLAST etc)
+         \item Discrete Fourier transform
+     \end{itemize}
+ 
+     \item associative operation applied to large array (order-independent \textit{reduce})
+     \begin{itemize}
+         \item sum of elements in integer array
+         \item word count for all books in e-library    
+     \end{itemize}
+ 
+     \item ...
+ \end{itemize}
+ \end{frame}
+ 
+ 
+ \begin{frame}[fragile]{Amdahl's law}
+ \framesubtitle{Key ideas}
+ 
+ Any problem consists of \textit{serial} part and \textit{parallel} part.
+ 
+ Speed-up of parallel part depends on computational resources. Serial part is ''fixed work''.
+ 
+ \begin{itemize}
+     \item \textbf{Diminishing Returns}: beyond certain point, adding more processors doesn't significantly increase speedup
+     \item \textbf{Limited Speedup}: problem cannot be solved faster than serial part
+ \end{itemize}
+ 
+ {\tiny\url{https://en.wikipedia.org/wiki/Amdahl%27s_law}}
+ \begin{center}
+ \includegraphics[width=0.3\textwidth]{./pics/amdahl.png}
+ \end{center}
+ \end{frame}
+ 
+ \begin{frame}[fragile]{Amdahl's law}
+ \framesubtitle{Examples}
+ 
+ \begin{itemize}
     \item Programmer enhances a part of the code that represents 10\% of the total execution time. This part starts to work \texttt{10 000} times faster. What is total speedup of a program?
-
+ 
     \item Problem could be split into two parts: A and B. A is serial, B is parallel. On single CPU, A takes 50 minutes, B takes 250 minutes. How many CPUs do you need to solve the problem in 100 minutes (achieve 3x speed-up)?
-
+ 
     \item Prepare an example where 10x speed-up could be achieved by using 100 CPUs only.
-\end{itemize}
+ \end{itemize}
+ 
+ \pause
+ {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.4/readme.markdown}}
+ \begin{homeworkmail}{Task \taskAmdhal}{
+     Provide answers and explanation for all three problems
+ }
+ \end{homeworkmail}
+ 
+ \end{frame}
+ 
+ 
+ \begin{frame}{Embarrassingly parallel problems}
+ \framesubtitle{Piece of advice}
+ 
+ Such problems usually quite interesting and practically-oriented.
+ 
+ They do \textbf{not} require non-trivial coordination so we will not cover them in this course.
+ 
+ In many domains, most of ''performance issues'' are (almost) embarrassingly parallel.
+ 
+ There are plenty of
+ \begin{itemize}
+         \item easy-to-use
+         \item straightforward
+         \item safe
+         \item stable
+         \item performant
+ \end{itemize}
+ solutions to such problems. Just use them and get speed-up predicted by Amdahl's law.
+ 
+ If you go real concurrency, it will be \textbf{harder}.
+ \end{frame}
 
-\pause
+  % TODO: trivial Stream-API h/w?
 
-\begin{homeworkmail}{Task \taskAmdhal}{
-    Provide answers and explanation for all three problems
-}
-\end{homeworkmail}
 
+ \begin{subsection}{Race condition}
+ \showTOCSub
+ 
+ \begin{frame}[fragile]{Race condition}
+ \framesubtitle{Example}
+ 
+ \begin{minted}{java}
+ public static void main(String... args) throws Exception {
+     Thread t1 = new Thread(() -> { System.out.println("Thread A"); });
+     Thread t2 = new Thread(() -> { System.out.println("Thread B"); });
+     t1.start(); t2.start();
+     t1.join(); t2.join();
+ }
+ \end{minted}
+ 
+ \pause
+ 
+ Execution 1: \texttt{Thread A Thread B}
+ 
+ Execution 2: \texttt{Thread B Thread A}
+ 
+ \end{frame}
+ 
+ 
+ \begin{frame}{Race condition}
+ \framesubtitle{Key idea}
+ 
+ \begin{itemize}
+     \item Every single operation in program is OK (properly synchronized, atomic)
+     \item Program as a whole suffers from non-deterministic behaviour
+     \item The only reason to this is different speed of execution
+ \end{itemize}
+ 
+ \pause
+ {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.5/readme.markdown}}
+ \begin{homeworkmail}{Task \taskEmpire}{
+     Open \url{https://deadlockempire.github.io}, pass all levels up to ''Confused counter'', inclusive.
+ }
+ \end{homeworkmail}
+ \end{frame}
+ 
+ \begin{frame}[t]{Race condition}
+ \framesubtitle{Conclusion}
+ 
+ Race condition
+ \begin{itemize}
+     \item at least 2 threads involved
+     \item behaviour of system depends on sequence of events (e.g. timings)
+     \item leads to non-deterministic results
+ \end{itemize}
+ 
+ \pause 
+ Really \textbf{suspicious}
+ \begin{itemize}
+     \item complicates analysis of algorithm (correctness, performance, resource utilization)
+     \item may lead to rarely reproducible bugs
+     \item may lead to random denial-of-service events
+ \end{itemize}
 \end{frame}
-
-
-\begin{frame}{Embarrassingly parallel problems}
-\framesubtitle{Piece of advice}
-
-Such problems usually quite interesting and practically-oriented.
-
-They do \textbf{not} require non-trivial coordination so we will not cover them in this course.
-
-In many domains, most of ''performance issues'' are (almost) embarrassingly parallel.
-
-There are plenty of
-\begin{itemize}
-        \item easy-to-use
-        \item straightforward
-        \item safe
-        \item stable
-        \item performant
-\end{itemize}
-solutions to such problems. Just use them and get speed-up predicted by Amdahl's law.
-
-If you go real concurrency, it will be \textbf{harder}.
-\end{frame}
-
-\begin{subsection}{Race condition}
-\showTOCSub
-
-\begin{frame}[fragile]{Race condition}
-\framesubtitle{Example}
-
-\begin{minted}{java}
-public static void main(String... args) throws Exception {
-    Thread t1 = new Thread(() -> { System.out.println("Thread A"); });
-    Thread t2 = new Thread(() -> { System.out.println("Thread B"); });
-    t1.start(); t2.start();
-    t1.join(); t2.join();
-}
-\end{minted}
-
-\pause
-
-Execution 1: \texttt{Thread A Thread B}
-
-Execution 2: \texttt{Thread B Thread A}
-
-\end{frame}
-
-
-\begin{frame}{Race condition}
-\framesubtitle{Key idea}
-
-\begin{itemize}
-    \item Every single operation in program is OK (properly synchronized, atomic)
-    \item Program as a whole suffers from non-deterministic behaviour
-    \item The only reason to this is different speed of execution
-\end{itemize}
-
-\pause
-
-\begin{homeworkmail}{Task \taskEmpire}{
-    Open \url{https://deadlockempire.github.io}, pass all levels up to ''Confused counter'', inclusive.
-}
-\end{homeworkmail}
-\end{frame}
-
-\begin{frame}[t]{Race condition}
-\framesubtitle{Conclusion}
-
-Race condition
-\begin{itemize}
-    \item at least 2 threads involved
-    \item behaviour of system depends on sequence of events (e.g. timings)
-    \item leads to non-deterministic results
-\end{itemize}
-
-\pause 
-Really \textbf{suspicious}
-\begin{itemize}
-    \item complicates analysis of algorithm (correctness, performance, resource utilization)
-    \item may lead to rarely reproducible bugs
-    \item may lead to random denial-of-service events
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t,noframenumbering]{Race condition}
-\framesubtitle{Conclusion}
-
-Race condition
-\begin{itemize}
-    \item at least 2 threads involved
-    \item behaviour of system depends on sequence of events (e.g. timings)
-    \item leads to non-deterministic results
-\end{itemize}
-
-Really \textbf{suspicious}
-\pause
-
-Not \textbf{necessarily} a problem
-\begin{itemize}
-    \item Server counts number of incoming requests.
-    \item Search engine crawls page graph using several workers. Many pages visited several times, deduplication makes result consistent.
-    \item Torrent client downloads several chunks of a file simultaneously.
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}[t,noframenumbering]{Race condition}
-\framesubtitle{Conclusion}
-
-Race condition
-\begin{itemize}
-    \item at least 2 threads involved
-    \item behaviour of system depends on sequence of events (e.g. timings)
-    \item leads to non-deterministic results
-\end{itemize}
-
-Really \textbf{suspicious}
-
-Not \textbf{necessarily} a problem
-
-\pause
-
-Main headache of our course:
-\begin{itemize}
- \item \textbf{Race condition may be a bug or intentional behaviour depending on programmer's intention}
-\end{itemize}
-
-In general, cannot be detected by static code analysis/dynamic instrumentation tool.
-\end{frame}
-
-\questiontime{Some tools detect race conditions in concurrent software. What is ''false positive'' detection of race condition?}
-
+ 
+ 
+ \begin{frame}[t,noframenumbering]{Race condition}
+ \framesubtitle{Conclusion}
+ 
+ Race condition
+ \begin{itemize}
+     \item at least 2 threads involved
+     \item behaviour of system depends on sequence of events (e.g. timings)
+     \item leads to non-deterministic results
+ \end{itemize}
+ 
+ Really \textbf{suspicious}
+ \pause
+ 
+ Not \textbf{necessarily} a problem
+ \begin{itemize}
+     \item Server counts number of incoming requests.
+     \item Search engine crawls page graph using several workers. Many pages visited several times, deduplication makes result consistent.
+     \item Torrent client downloads several chunks of a file simultaneously.
+ \end{itemize}
+ 
+ \end{frame}
+ 
+ \begin{frame}[t,noframenumbering]{Race condition}
+ \framesubtitle{Conclusion}
+ 
+ Race condition
+ \begin{itemize}
+     \item at least 2 threads involved
+     \item behaviour of system depends on sequence of events (e.g. timings)
+     \item leads to non-deterministic results
+ \end{itemize}
+ 
+ Really \textbf{suspicious}
+ 
+ Not \textbf{necessarily} a problem
+ 
+ \pause
+ 
+ Main headache of our course:
+ \begin{itemize}
+  \item \textbf{Race condition may be a bug or intentional behaviour depending on programmer's intention}
+ \end{itemize}
+ 
+ In general, cannot be detected by static code analysis/dynamic instrumentation tool.
+ \end{frame}
+ 
+ \questiontime{Some tools detect race conditions in concurrent software. What is ''false positive'' detection of race condition?}
+ 
 \begin{subsection}{Data race}
 \showTOCSub
 
@@ -1003,7 +1254,6 @@ Execution 1: \texttt{x = 1}
 Execution 2: \texttt{x = 2}
 \end{frame}
 
-
 \begin{frame}[t,fragile]{Data race}
 \framesubtitle{Example 2.5}
 
@@ -1048,7 +1298,6 @@ Any data race is race condition. Not every race condition is data race.
 
 \end{frame}
 
-
 \begin{frame}[fragile]{Data race}
 \framesubtitle{Compound data example}
 
@@ -1074,110 +1323,114 @@ What is the size of \texttt{list}? \textbf{1} or \textbf{2}?
 Data race may lead to \textbf{inconsistent} state even if every thread executed only ''valid'' operations.
 \end{frame}
 
-\begin{frame}[fragile]{Data race}
-\framesubtitle{Word tearing}
-
-\begin{minted}{java}
-static volatile long data = 0;
-public static void main(String... args) throws Exception {
-    Thread t1 = new Thread(() -> { data = (1 << 0) + (1 << 33); });
-    Thread t2 = new Thread(() -> { data = (2 << 0) + (2 << 33); });
-    t1.start(); t2.start();
-    System.out.println("data = " + data);
-    t1.join(); t2.join();
-}
-\end{minted}
-
-\pause
-
-Is it possible to see \texttt{data == (1 << 0) + (2 << 33)}?
-
-\pause
-Depends on hardware, compiler and language. 
-
-\end{frame}
-
-\begin{frame}[fragile]{Data race}
-\framesubtitle{Word tearing}
-
-Java Language Specification\footnote{\url{https://docs.oracle.com/javase/specs/jls/se23/html/jls-17.html#jls-17.6}}
-
-\begin{quote}
-For the purposes of the Java programming language memory model, a single write to a non-volatile long or double value is treated as two separate writes: one to each 32-bit half. This can result in a situation where a thread sees the first 32 bits of a 64-bit value from one write, and the second 32 bits from another write.
-
-Writes and reads of volatile long and double values are always atomic.
-
-Writes to and reads of references are always atomic, regardless of whether they are implemented as 32-bit or 64-bit values.
-\end{quote}
-
-\pause
-
-Data race may lead to \textbf{unexpected} state even if every thread executed only ''valid'' operations.
-\end{frame}
 
 
-\begin{frame}{Data race}
-\framesubtitle{Benign data race}
+% TODO: separate optional homework?
+% 
+% \begin{frame}[fragile]{Data race}
+% \framesubtitle{Word tearing}
+% 
+% \begin{minted}{java}
+% static volatile long data = 0;
+% public static void main(String... args) throws Exception {
+%     Thread t1 = new Thread(() -> { data = (1 << 0) + (1 << 33); });
+%     Thread t2 = new Thread(() -> { data = (2 << 0) + (2 << 33); });
+%     t1.start(); t2.start();
+%     System.out.println("data = " + data);
+%     t1.join(); t2.join();
+% }
+% \end{minted}
+% 
+% \pause
+% 
+% Is it possible to see \texttt{data == (1 << 0) + (2 << 33)}?
+% 
+% \pause
+% Depends on hardware, compiler and language. 
+% 
+% \end{frame}
+% 
+% \begin{frame}[fragile]{Data race}
+% \framesubtitle{Word tearing}
+% 
+% Java Language Specification\footnote{\url{https://docs.oracle.com/javase/specs/jls/se23/html/jls-17.html#jls-17.6}}
+% 
+% \begin{quote}
+% For the purposes of the Java programming language memory model, a single write to a non-volatile long or double value is treated as two separate writes: one to each 32-bit half. This can result in a situation where a thread sees the first 32 bits of a 64-bit value from one write, and the second 32 bits from another write.
+% 
+% Writes and reads of volatile long and double values are always atomic.
+% 
+% Writes to and reads of references are always atomic, regardless of whether they are implemented as 32-bit or 64-bit values.
+% \end{quote}
+% 
+% \pause
+% 
+% Data race may lead to \textbf{unexpected} state even if every thread executed only ''valid'' operations.
+% \end{frame}
 
-%static boolean isPrime(int x) {
-%    assert x > 1
-%    for (int i = 2; i < x; i++) {
-%      if (x % i == 0) return false
-%    }
-%    return true;
-%}
-%
-%class EagerPrimeChecker {
-%    final int number;
-%    final boolean isPrime;
-%
-%    CachedPrimeChecker(int x) {
-%      this.number = x;
-%      this.isPrime = isPrime(x);
-%    }
-%
-%    boolean isPrime() {        
-%        return this.isPrime;
-%    }
-%}
-%
-%class LazyPrimeChecker {
-%    final int number;
-%    EagerPrimeChecker checker;
-%
-%    CachedPrimeChecker(int x) {
-%      this.number = x;
-%      this.checker = null;
-%    }
-%
-%    boolean isPrime() {
-%        if (this.checker == null) {
-%            this.checker = new EagerPrimeChecker(this.number);
-%        }
-%        return this.checker.isPrime();
-%    }    
-%}
-%
-%main() {
-%    final LazyPrimeChecker l = new LazyPrimeChecker(1_000_471);
-%    t1 = new Thread() { -> println(l.isPrime()) } 
-%    t2 = new Thread() { -> println(l.isPrime()) } 
-%    t1.join()
-%    t2.join();
-%}
 
-Data race that \textit{does not} affect correctness.
-
-To be sure about this, you need to
-\begin{itemize}
-    \item understand all possible interleavings (Lecture~\extraBasicsNum) and memory ordering effects (Lecture~\cacheCoherencyNum)
-    \item ensure particular language memory model allows such hacks (Lecture~\langMMNum)
-    \item trust language compiler developers and language runtime engineers (Lecture~\designNum)
-\end{itemize}
-
-In our course \textbf{any} data race considered harmful.
-
-\end{frame}
+% \begin{frame}{Data race}
+% \framesubtitle{Benign data race}
+% 
+% %static boolean isPrime(int x) {
+% %    assert x > 1
+% %    for (int i = 2; i < x; i++) {
+% %      if (x % i == 0) return false
+% %    }
+% %    return true;
+% %}
+% %
+% %class EagerPrimeChecker {
+% %    final int number;
+% %    final boolean isPrime;
+% %
+% %    CachedPrimeChecker(int x) {
+% %      this.number = x;
+% %      this.isPrime = isPrime(x);
+% %    }
+% %
+% %    boolean isPrime() {        
+% %        return this.isPrime;
+% %    }
+% %}
+% %
+% %class LazyPrimeChecker {
+% %    final int number;
+% %    EagerPrimeChecker checker;
+% %
+% %    CachedPrimeChecker(int x) {
+% %      this.number = x;
+% %      this.checker = null;
+% %    }
+% %
+% %    boolean isPrime() {
+% %        if (this.checker == null) {
+% %            this.checker = new EagerPrimeChecker(this.number);
+% %        }
+% %        return this.checker.isPrime();
+% %    }    
+% %}
+% %
+% %main() {
+% %    final LazyPrimeChecker l = new LazyPrimeChecker(1_000_471);
+% %    t1 = new Thread() { -> println(l.isPrime()) } 
+% %    t2 = new Thread() { -> println(l.isPrime()) } 
+% %    t1.join()
+% %    t2.join();
+% %}
+% 
+% Data race that \textit{does not} affect correctness.
+% 
+% To be sure about this, you need to
+% \begin{itemize}
+    % \item understand all possible interleavings (Lecture~\extraBasicsNum) and memory ordering effects (Lecture~\cacheCoherencyNum)
+%     \item ensure particular language memory model allows such hacks (Lecture~\langMMNum)
+%     \item trust language compiler developers and language runtime engineers (Lecture~\designNum)
+% \end{itemize}
+% 
+% In our course \textbf{any} data race considered harmful.
+% 
+% \end{frame}
 
 
 \begin{frame}{Data race}
@@ -1233,9 +1486,7 @@ For now, we should expect that
     \item \texttt{Thread.start}
     \item \texttt{Thread.join}
 \end{itemize}
-
 \end{frame}
-
 
 \begin{frame}[fragile]{Visibility}
 \framesubtitle{Incorrect: message passing via plain fields}
@@ -1259,10 +1510,8 @@ May hang because:
 \end{itemize}
 \end{frame}
 
-
 \begin{subsection}{Deadlock}
 \showTOCSub
-
 
 \begin{frame}[t,fragile]{Blocking methods}
 \framesubtitle{Wait-for graph}
@@ -1330,6 +1579,7 @@ Thread A = new Thread(() -> {
 \end{tikzpicture}
 \end{frame}
 
+
 \begin{frame}[t,noframenumbering,fragile]{Blocking methods}
 \framesubtitle{Wait-for graph}
 
@@ -1378,19 +1628,11 @@ Thread A = new Thread(() -> {
 \end{frame}
 
 
-
-
-
-
-
-
-
-
-
 \begin{frame}[fragile]{Blocking methods}
 \framesubtitle{Deadlock}
 
 Deadlock -- cycle in wait-for graph.
+\pause
 
 Trivial single-threaded deadlock:
 \pause
@@ -1450,7 +1692,7 @@ Output:
 \end{itemize}
 
 \pause
-
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/1.6/readme.markdown}}
 \begin{homeworkmail}{Task \taskJstack}{
     Run \texttt{jstack} on all deadlock samples from this lecture.
 }
@@ -1468,10 +1710,10 @@ Output:
 \framesubtitle{Priority inversion}
 
 \begin{minted}{java}
-Thread A = new Thread(() -> { do1(); B = startThread(); do2(); B.join(); }); 
-A.start();
-doCriticalWork();
-A.join();
+public static void main(String... args) {
+  Thread A = new Thread(() -> { do1(); B = startThread(); do2(); B.join(); }); 
+  A.start(); doCriticalWork(); A.join();
+}
 \end{minted}
 
 \texttt{main} waitsFor \texttt{A}, \texttt{A} waitsFor \texttt{B}.
@@ -1491,51 +1733,53 @@ If you launch rovers on Mars, be ready to debug them\footnote<2->{\url{https://w
 
 \end{frame}
 
-
 \begin{section}{Summary}
+\showTOC
 
 \begin{frame}{Summary}
 
 \begin{itemize}
-    \item We study agents with different speed that communicate with each other via shared memory
+    \item Agents with different speed could communicate with each other via shared memory
+    \item Parallel and concurrent execution could look similar and could happen in the same system
+    \begin{itemize}
+        \item Concurrency: tasks may be interrupted in pre-defined places or arbitrary
+        \item Parallel: independent tasks may be executed simultaneously on different cores
+    \end{itemize}
     \item Threads are parts of OS processes and are minimal unit of work for scheduler
-    \item Tasks may be interrupted in pre-defined places or arbitrary allowing different levels of concurrency
-    \item Independent tasks may be executed in parallel on different cores
+    \item There are different threading models: \texttt{1:1}, \texttt{N:1}, \texttt{N:M}
+    \item Interleaving \texttt{N:1} is useful yet simplified model of concurrent execution
     \item The perfect scenario: problem could be divided into many independent parts with almost zero coordination overheads
     \item Amdahl's law fundamentally limits possible speed-up of tasks with sequential parts
-    \item Whenever you coordinate threads, you encounter race conditions, data races, visibility issues, deadlocks, priority inversion
+    \item Whenever you coordinate threads, you encounter non-determinism, race conditions, data races, visibility issues, deadlocks, priority inversion
 \end{itemize}
 
 \end{frame}
 
 \begin{frame}{Summary: homework}
 
-\begin{itemize}
-    \item answer ''threads and exceptions'' question (Task~\taskExceptions)
-    \item solve amdahl's law puzzles (Task~\taskAmdhal)
-    \item \url{https://deadlockempire.github.io/} up to ''Confused Counter'' (Task~\taskEmpire)
-    \item run \texttt{jstack} on deadlock samples (Task~\taskJstack)
-\end{itemize}
+\texttt{Lecture 1, Tasks 1.*:} {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1}}
 
-% Small homework (2w)
-% 
-% interface MyFuture<T> {
-%     T get();
-% 
-%     MyFuture<Y> andThen(Producer<Y> p);
-% } 
-% 
-% public static MyFuture<T> computeOtherThread(Producer<T> p) {
-% }
-% 
-% 
-% Write documentation
-% Transferring exceptions (*!! in seminar)
-% Design tests
-% O(n) andThen requires how many simultaneous threads?
-% Future may hang, how to design API that is useful?
-% prove no data races in implementation
-% provide example with deadlocks for n-threads
 \end{frame}
+
+% % Small homework (2w)
+% % 
+% % interface MyFuture<T> {
+% %     T get();
+% % 
+% %     MyFuture<Y> andThen(Producer<Y> p);
+% % } 
+% % 
+% % public static MyFuture<T> computeOtherThread(Producer<T> p) {
+% % }
+% % 
+% % 
+% % Write documentation
+% % Transferring exceptions (*!! in seminar)
+% % Design tests
+% % O(n) andThen requires how many simultaneous threads?
+% % Future may hang, how to design API that is useful?
+% % prove no data races in implementation
+% % provide example with deadlocks for n-threads
+% \end{frame}
 
 \end{document}
