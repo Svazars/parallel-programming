@@ -9,4 +9,4 @@
 [Сдача домашних заданий и итоговая оценка](/docs/hw/hw.pdf).
 
 
-[Страница курса](https://sys.pro/courses/parallel/).
+[Страница курса](https://nsu-syspro.github.io/courses/parallel).
