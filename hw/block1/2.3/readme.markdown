@@ -51,9 +51,9 @@ class MyReentrantLock {
 
 Do not forget to provide unit tests for your solution. **Clarification**: of course you could use `java.util.concurrent` to write proper tests and provide high-quality mocks for `NonReentrantLock`.
 
-**Hint 1**: you could use special technique called ''spinning'' (google spin-lock). If your lock data structure has `boolean tryLock` method then `lock` method could just call `tryLock` in infinite loop.
+**Hint 1**: you could use special technique called ''spinning'' (google "spin-lock"). If your lock data structure has `boolean tryLock` method then `lock` method could just call `tryLock` in infinite loop.
 
-**Hint 2**: you could use more elaborate algorithm to avoid useless burning of CPU cycles. It will grant you additional score for this task.
+**Hint 2**: you could use more elaborate algorithm to avoid useless burning of CPU cycles (google "backoff policy"). It will grant you additional score for this task.
 
 ## Requirements
 

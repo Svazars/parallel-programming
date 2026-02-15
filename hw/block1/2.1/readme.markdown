@@ -4,7 +4,7 @@
 
 Is it possible that some exception would happen **inside** `Lock.lock` or `Lock.unlock` method? Justify your answer by using precise `chapter.section` number from Java Language Specification.
 
-**Hint**: `sqrt[3]{1331}$` is good magic number.
+**Hint**: `sqrt[3]{1331}` is good magic number.
 
 ## 2.1.b
 
