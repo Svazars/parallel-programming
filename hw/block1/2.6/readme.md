@@ -12,11 +12,14 @@ https://en.wikipedia.org/wiki/Dining_philosophers_problem.
 
 ## Programming assignment
 
-Implement `DefaultPhilosopher.onHungry` method to avoid deadlock situation. Of course, you should not "hack" source
-code,
-e.g. you are not allowed to override `DefaultFork` behaviour or replace `Philosopher.eat` implementation.
+Implement `DefaultPhilosopher.onHungry` method to avoid deadlock situation. You are allowed to define auxiliary classes 
+and data structures, define and initialize additional static variables. However, you should not modify source code of any 
+already existing class except `DefaultPhilosopher.onHungry` method. You also should not "hack" source code, e.g. you are 
+not allowed to override `DefaultFork` behaviour or replace `Philosopher.eat` implementation.
 
-### Acceptance critera
+Feel free to add `println`/`sleep` anywhere so you better understand concurrent behaviour of the code.
+
+### Acceptance criteria
 
 #### Level 1 (easy)
 
