@@ -1,0 +1,139 @@
+\begin{frame}[fragile]{Interleaving model: visualization}
+
+\begin{lstlisting}
+                     static int x, y;
+\end{lstlisting}
+
+\begin{tabular}{p{6cm}p{5cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 18 em,
+    linebackgroundcolor={%
+      \btLstHL<2>{3}% on slide 1, highlight lines 3
+      \btLstHL<3>{4}
+      \btLstHL<4>{5}
+      \btLstHL<5>{6}
+      \btLstHL<6-11>{7}
+    }]
+class A extends Thread {
+  public void run() {
+    int a_x = x;   // A.1
+    int a_y = y;   // A.2
+    x++;           // A.3
+    y++;           // A.4
+    log(a_x, a_y); // A.5
+   }
+}
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<7>{3}
+      \btLstHLG<8>{4}
+      \btLstHLG<9>{5}
+      \btLstHLG<10>{6}
+      \btLstHLG<11>{7}
+    }]
+class B extends Thread {
+  public void run() {
+    int b_x = x;   // B.1
+    int b_y = y;   // B.2
+    x++;           // B.3
+    y++;           // B.4
+    log(b_x, b_y); // B.5
+   }
+}
+\end{lstlisting} \\
+\end{tabular}
+
+\onslide<6->   {\texttt{A.1->...->A.5. a\_x = 0, a\_y = 0;}}
+\newline
+\onslide<11->  {\texttt{A.1->...->A.5->B.1->...->B.5. a\_x = 0, a\_y = 0, b\_x = 1, b\_y = 1;}}
+\newline
+\texttt{       }
+\end{frame}
+
+\begin{frame}[fragile]{Interleaving model: single execution trace}
+\begin{tabular}{p{6cm}p{5cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 18 em,
+    linebackgroundcolor={%
+      \btLstHL<2-3>{3}% on slide 1, highlight lines 3
+      \btLstHL<4-5>{4}
+      \btLstHL<6>{5}
+      \btLstHL<7>{6}
+      \btLstHL<8->{7}
+    }]
+class A extends Thread {
+  public void run() {
+    int a_x = x;   // A.1                         
+    int a_y = y;   // A.2                         
+    x++;           // A.3                  
+    y++;           // A.4                 
+    log(a_x, a_y); // A.5                           
+   }
+}
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<3-4>{3}
+      \btLstHLG<5-8>{4}
+      \btLstHLG<9>{5}
+      \btLstHLG<10>{6}
+      \btLstHLG<11->{7}
+    }]
+class B extends Thread {
+  public void run() {
+    int b_x = x;   // B.1                                
+    int b_y = y;   // B.2                                
+    x++;           // B.3                         
+    y++;           // B.4                        
+    log(b_x, b_y); // B.5                                  
+   }
+}
+\end{lstlisting} \\
+\end{tabular}
+
+\newline 
+\onslide<8-> {\texttt{A1->B1->A2->B2->A3->...->A5: a\_x = 0, a\_y = 0;}}
+\newline
+\onslide<11->{\texttt{A1->B1->A2->B2->A3->...->A5->...->B5: a\_x = 0, a\_y = 0, b\_x = 0, b\_y = 0;}}
+\end{frame}
+
+
+\begin{frame}[fragile]{Interleaving model: possible execution results}
+\begin{tabular}{p{6cm}p{5cm}}
+    \begin{lstlisting}[basicstyle=\fontsize{9}{10}\selectfont\ttfamily]
+class A extends Thread {
+  public void run() {
+    int a_x = x;
+    int a_y = y;
+    x++; 
+    y++;
+    log(a_x, a_y);
+}}
+    \end{lstlisting}      
+          &
+    \begin{lstlisting}[basicstyle=\fontsize{9}{10}\selectfont\ttfamily]
+class B extends Thread {
+  public void run() {
+    int b_x = x;
+    int b_y = y;
+    x++; 
+    y++;
+    log(b_x, b_y);
+}}
+\end{lstlisting} 
+\end{tabular}
+\begin{center}
+\texttt{a\_x = 0, a\_y = 0, b\_x = 0, b\_y = 0} \newline
+\texttt{a\_x = 0, a\_y = 0, b\_x = 0, b\_y = 1} \newline
+\texttt{a\_x = 0, a\_y = 0, b\_x = 1, b\_y = 0} \newline
+\texttt{a\_x = 0, a\_y = 0, b\_x = 1, b\_y = 1} \newline
+\texttt{...} \newline
+\end{center}
+\end{frame}
