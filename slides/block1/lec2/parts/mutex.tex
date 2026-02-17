@@ -1,0 +1,438 @@
+\section{Mutex}
+\subsection{Reentrancy}
+\showTOCSub
+
+\begin{frame}[t, fragile]{NonReentrantLock}
+
+\texttt{NonReentrantLock = \{ boolean busy \}}
+
+\pause
+
+Single-threaded deadlock №1:
+\begin{minted}{java}
+    void foo() { l.lock(); l.lock(); }
+\end{minted}
+
+\pause
+
+Single-threaded deadlock №2:
+
+\begin{minted}{java}
+    void add(Object o) {
+        l.lock(); try { a.add(o); } finally { l.unlock(); }}
+    boolean contains(Object o) {
+        l.lock(); try { return a.contains(o); } finally { l.unlock(); }}
+    void addIfAbsent(Object o) {
+        l.lock(); try { if (!contains(o)) add(o); } finally { l.unlock(); }}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{ReentrantLock}
+
+\begin{itemize}
+    \item ReentrantLock, ReentrantMutex
+    \item RecursiveLock, RecursiveMutex
+\end{itemize}
+
+\pause
+
+\texttt{ReentrantLock = \{ Owner owner, int count \}}
+
+Not every \texttt{unlock} actually releases ownership
+
+\pause
+Important concepts:
+\begin{itemize}
+    \item Structured locking: every \texttt{lock} paired with \texttt{unlock}
+    \item Ownership: unique Thread ID (\texttt{Thread.currentThread()}\footnote<3->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#currentThread()}}) to distinguish owners
+\end{itemize}
+
+\pause
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.3/readme.markdown}}
+\begin{homeworkmail}{Task \taskReentrant}
+    Implement reentrant mutex using non-reentrant one.
+}
+\end{homeworkmail}
+\end{frame}
+
+\questiontime{Concurrency is hard! Why would anybody use NonReentrantMutex?}
+
+
+\begin{frame}[fragile]{Toy problem: thread-safe counter}
+\framesubtitle{ReentrantLock-based\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/ReentrantLock.html}} implementation}
+
+\begin{minted}{java}
+public class Counter {
+    private final Lock lock = new ReentrantLock();
+    private long counter;
+    public Counter(long initial) { counter = initial; }
+    public void increment() {
+        lock.lock(); try { counter++; } finally { lock.unlock(); }
+    }
+    public long get() { 
+        lock.lock(); try {  return counter; } finally { lock.unlock(); }
+    }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile,noframenumbering]{Toy problem: thread-safe counter}
+\framesubtitle{ReentrantLock-based implementation}
+
+\begin{minted}{java}
+public class Counter {
+    private final Lock lock = new ReentrantLock();
+    private long counter;
+    public Counter(long initial) { counter = initial; }
+    public void increment() {
+        lock.lock(); try { counter++; } finally { lock.unlock(); }
+    }
+    public long get() { 
+        lock.lock(); try {  return counter; } finally { lock.unlock(); }
+    }
+}
+\end{minted}
+
+\begin{itemize}
+    \item \pause Data races? \pause Race conditions? \pause Concurrently consistent?
+    \item \pause Deadlock-freedom? \pause Starvation-freedom? \pause Scalability?
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[fragile]{Homework: thread-safe counters}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.4/readme.markdown}}
+
+\begin{homeworkmail}{Task \taskCounters}
+    \begin{itemize}
+        \item Implement different kinds of thread-safe counters
+        \item Analyze scalability using JMH\footnote{\tiny\url{https://github.com/openjdk/jmh}}
+        \item Find inconsistencies in ''highly-distributed'' counters implementations
+    \end{itemize}
+}
+\end{homeworkmail}
+
+\end{frame}
+
+
+% \begin{frame}{Toy problem: thread-safe counter}
+% \framesubtitle{Mutex implementation: brief discussion}
+% 
+% Any concurrent algorithm should be analyzed for the \textbf{key} properties:
+% \begin{itemize}
+%     \item Safety (correctness)
+%     \begin{itemize}
+%         \item Implements contract (consistency)
+%         \item Absence of invariant violations
+%         \item Absence of data races
+%         \item Absence of concurrent logical errors (unfortunate race conditions)
+%     \end{itemize}
+%     \item Liveness (progress)
+%     \begin{itemize}
+%         \item Deadlock-freedom
+%         \item Livelock-freedom    
+%         \item Starvation-freedom
+%     \end{itemize}
+%     \item Performance
+%     \begin{itemize}
+%         \item Throughput (fast-path/slow-path overheads)
+%         \item Latency (fairness, priority inversion)
+%         \item Scalability
+%     \end{itemize}
+% \end{itemize}
+% \end{frame}
+
+\subsection{Admission policy}
+\showTOCSub
+
+
+\begin{frame}[fragile]{Fairness}
+
+\begin{itemize}
+    \item \textbf{Mutual exclusion}: no more than one thread enters
+    \item \textbf{Deadlock-freedom}: some thread eventually enters
+    \item \textbf{Starvation-freedom}: this thread eventually enters
+\end{itemize}
+
+\pause
+
+If there are \texttt{N} contending threads, what is ''distribution of enters''?
+
+\begin{itemize}
+    \pause \item Arbitrary
+    \pause \item Priority-based
+    \pause \item Even    
+\end{itemize}
+
+\pause
+We could empirically measure this: {\url{https://en.wikipedia.org/wiki/Fairness_measure}}
+
+\pause
+In our course we will use ''all-or-nothing'' approach: thread \textbf{could starve} or \textbf{never starves}.
+\end{frame}
+
+
+\questiontime{assume some thread starves. Does it mean that throughput of the whole program will be low?}
+
+\begin{frame}[t,fragile]{Fairness and performance}
+\framesubtitle{LIFO}
+
+\only<1-5>{ \texttt{\ \ \ \ \ \ \ \ \ A work: 0  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+\only<6-8>{ \texttt{\ \ \ \ \ \ \ \ \ A work: 1  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+\only<9-11>{\texttt{\ \ \ \ \ \ \ \ \ A work: 2  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+\only<12->{ \texttt{\ \ \ \ \ \ \ \ \ A work: 3  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHL<2-4>{2}
+      \btLstHL<5>{3}
+      \btLstHL<6>{4}
+      \btLstHL<7>{5}
+      \btLstHL<8>{3}
+      \btLstHL<9>{4}
+      \btLstHL<10>{5}
+      \btLstHL<11>{3}
+      \btLstHL<12>{4}
+      \btLstHL<13->{5}
+    }]
+public void threadA() {
+  while (true) {
+    unfairMutex.lock();
+    doWork();
+    unfairMutex.unlock();  
+  }
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<3>{2}
+      \btLstHLG<4->{3}
+    }]
+public void threadB() {   
+  while (true) {
+    unfairMutex.lock();
+    doWork();
+    unfairMutex.unlock(); 
+  }
+ }
+\end{lstlisting} \\
+\end{tabular}
+
+\only<1-4>{\texttt{\ \ \ A context switch: 0   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 0}}
+\only<5->{\texttt{\ \ \ A context switch: 0   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 1}}
+
+\only<14->{
+    \begin{itemize}
+        \item Unfair locks allow some threads to better utilize scheduling quantum. Better throughput.
+        \item Unfair locks could cause starvation. Higher latency.
+    \end{itemize}
+}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Fairness and performance}
+\framesubtitle{FIFO}
+
+\only<1-5>{ \texttt{\ \ \ \ \ \ \ \ \ A work: 0  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+\only<6-8>{ \texttt{\ \ \ \ \ \ \ \ \ A work: 1  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 0}}
+\only<9-11>{\texttt{\ \ \ \ \ \ \ \ \ A work: 1  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 1}}
+\only<12-14>{\texttt{\ \ \ \ \ \ \ \ \ A work: 2  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 1}}
+\only<15->{\texttt{\ \ \ \ \ \ \ \ \ A work: 2  \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \     B work 2}}
+
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHL<2-3>{2}
+      \btLstHL<4-5>{3}
+      \btLstHL<6>{4}
+      \btLstHL<7>{5}
+      \btLstHL<8-11>{3}
+      \btLstHL<12>{4}
+      \btLstHL<13>{5}
+      \btLstHL<14->{3}
+    }]
+public void threadA() {
+  while (true) {
+    fairMutex.lock();
+    doWork();
+    fairMutex.unlock();  
+  }
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<3-4>{2}
+      \btLstHLG<5-8>{3}
+      \btLstHLG<9>{4}
+      \btLstHLG<10>{5}
+      \btLstHLG<11-14>{3}
+      \btLstHLG<15>{4}
+      \btLstHLG<16>{5}
+      \btLstHLG<17->{3}
+    }]
+public void threadB() {   
+  while (true) {
+    fairMutex.lock();
+    doWork();
+    fairMutex.unlock(); 
+  }
+ }
+\end{lstlisting} \\
+\end{tabular}
+
+\only<1-4>{\texttt{\ \ \ A context switch: 0   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 0}}
+\only<5-7>{\texttt{\ \ \ A context switch: 0   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 1}}
+\only<8-10>{\texttt{\ \ \ A context switch: 1   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 1}}
+\only<11-13>{\texttt{\ \ \ A context switch: 1   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 2}}
+\only<14-16>{\texttt{\ \ \ A context switch: 2   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 2}}
+\only<17->{\texttt{\ \ \ A context switch: 2   \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \      B context switch 3}}
+
+\only<18->{
+    \begin{itemize}
+        \item Fair locks could trigger many context switches. Lower utilization.
+        \item Fair locks encourage better responsiveness. Lower latency.
+        \item Fair locks provide more guarantees on lock ordering. Better predictability.
+    \end{itemize}
+}
+\end{frame}
+
+%\begin{frame}{High-level mutex design choices}
+%
+%Contended mutex: 
+%\begin{itemize}
+%    \item single \textbf{owner}
+%    \item set of \textbf{waiters} (EnterSet)
+%    \item set of \textbf{arriving threads} (ArriveSet)
+%\end{itemize}
+%
+%TODO: room based picture
+%
+%\end{frame}
+%
+%
+%\begin{frame}{Admission policy}
+%\framesubtitle{Contenders ordering}
+%
+%Contended mutex: 
+%\begin{itemize}
+%    \item single \textbf{owner}
+%    \item set of \textbf{waiters} (EnterSet)
+%    \item set of \textbf{arriving threads} (ArriveSet)
+%\end{itemize}
+%
+%TODO: room based picture
+%
+%\pause
+%
+%How to manage EnterSet?
+%
+%\pause
+%
+%\begin{itemize}
+%    \item last-in-first-out (LIFO)
+%    \item first-in-first-out (FIFO)
+%    \item priority queue or random choice    
+%\end{itemize}
+%
+%\pause
+%
+%How to manage ArriveSet?
+%
+%\pause
+%
+%\begin{itemize}
+%    \item try-lock-then-wait (ArriveSet > EnterSet)
+%    \item if-busy-then-wait (ArriveSet < EnterSet)
+%    \item random or heuristic choice    
+%\end{itemize}
+%
+%\pause
+%
+%Race conditions everywhere!
+%\end{frame}
+%
+%\begin{frame}[t]{Admission policy}
+%\framesubtitle{Design space}
+%
+%Depends on your goal:
+%\begin{itemize}
+%    \item Max throughput: LIFO (unfair, best average case, degraded outliers)
+%\end{itemize}    
+%
+%\end{frame}
+%
+%\questiontime{Why LIFO admission policy for mutex provides the best throughput?}
+
+\begin{frame}[t,noframenumbering]{Admission policy}
+\framesubtitle{Design space}
+
+Depends on your goal:
+\begin{itemize}
+    \pause \item Max throughput: \pause LIFO (unfair, best average case, degraded outliers)
+    \pause \item Latency: \pause FIFO (fair, guaranteed worst case)
+    \pause \item Predictability: \pause almost FIFO or priorities (semi-fair, acceptable worst case)
+\end{itemize}
+
+\pause
+
+Everything has negative side:
+\begin{itemize}
+    \item Starvation, Priority inversion, Throughput, Deadlock probability
+\end{itemize}
+
+\pause
+
+\textbf{Your concurrent data structures should document admission policy and starvation scenarios for blocking methods}
+
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Admission policy}
+\framesubtitle{java.util.concurrent.ReentrantLock}
+
+\textbf{Your concurrent data structures should document admission policy and starvation scenarios for blocking methods}
+
+\pause
+
+\begin{minted}{java}
+    ReentrantLock(boolean fair)
+\end{minted}
+
+\pause
+
+\begin{quote}
+When set true, under contention, locks favor granting access to the longest-waiting thread. Otherwise this lock does not guarantee any particular access order. 
+\end{quote}
+
+\pause
+
+\begin{quote}
+Programs using fair locks accessed by many threads may display lower overall throughput (i.e., are slower; often much slower) than those using the default setting, but have smaller variances in times to obtain locks and guarantee lack of starvation.
+\end{quote}
+
+\pause
+\begin{quote}
+Note however, that fairness of locks does not guarantee fairness of thread scheduling ... Also note that the untimed tryLock() method does not honor the fairness setting. 
+\end{quote}
+
+\pause
+Task~\taskCounters, Easy level: {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.4/readme.markdown}}
+
+% TODO: dave dice on admision policy
+% https://web.archive.org/web/20160316200659/https://blogs.oracle.com/dave/entry/locks_with_lifo_admission_order
+
+\end{frame}

@@ -1,0 +1,221 @@
+\section{Mutual exclusion}
+\showTOCSub
+
+\begin{frame}[fragile]{Mutual exclusion}
+\framesubtitle{Naming}
+
+Mutual exclusion: no more than one thread enters code fragment (critical section)
+
+\begin{minted}{java}
+interface Lock {
+    void lock();
+    void unlock();
+}
+\end{minted}
+
+\pause
+
+\begin{minted}{java}
+interface Mutex {
+    void enter();
+    void exit();
+}
+\end{minted}
+
+\pause
+
+\begin{minted}{java}
+interface CriticalSection {
+    void begin();
+    void end();
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile]{Mutual exclusion}
+\framesubtitle{Usage pattern}
+
+Lock usage\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/Lock.html}}:
+
+\begin{minted}{java}
+  Lock lock = ...
+  lock.lock();
+  try {
+    ...
+  } finally {
+    lock.unlock();
+  }
+\end{minted}
+
+\pause
+
+\begin{itemize}
+    \item \textbf{If you are not using try-finally for locks -- you are writing incorrect code}
+\end{itemize}
+\end{frame}
+
+\questiontime{Assume your program \texttt{lock}s in one method and \texttt{unlock}s in other. Which constructs for control flow could ''spoil'' your locking invariants?}
+
+\begin{frame}[fragile]{Exceptions are hard}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.1/readme.markdown}}
+
+\begin{homeworkmail}{Task \taskAsyncException.a}
+    Is it possible that some exception would happen \textbf{inside} \texttt{lock} or \texttt{unlock} operation? Justify your answer by using precise \texttt{chapter.section} number from Java Language Specification.
+}
+\end{homeworkmail}
+
+Help: $\sqrt[3]{1331}$ is good magic number.
+
+\begin{homeworkmail}{Task \taskAsyncException.b}
+    Is it possible to design ''bullet-proof'' (w.r.t. exceptions) concurrency primitives in Java language? Justify your answer by using precise JDK Enhancement Proposal number.
+}
+\end{homeworkmail}
+
+Help: $\sqrt{72900}$ is good magic number, too.
+
+\pause
+\textbf{Warning:} these tasks are hard. It usually takes 3-5 attempts to ''defend'' your answer.
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Mutex basics}
+
+\begin{minted}{java}
+interface Lock { 
+    void lock(); 
+    void unlock(); 
+}
+\end{minted}
+
+\begin{itemize}
+    \item Only one contending thread enters critical section. \textbf{Mutual exclusion}.
+\end{itemize}
+
+\pause What should other contending threads do?
+
+\begin{itemize}
+    \pause \item Await their ''turn''
+\end{itemize}
+
+\pause What exactly should current thread do when mutex is already busy?
+
+\begin{itemize}
+    \pause \item Release current scheduling quantum
+\end{itemize}
+
+\pause When thread will be awaken?
+
+\begin{itemize}
+    \pause \item randomly after some time period (if mutex is still busy, thread will be suspended again)
+    \pause \item when mutex is unlocked (but mutex may become busy before thread is ''ready to go'')
+    \pause \item ... 
+\end{itemize}
+
+\pause
+Actually, you do not know. 
+\pause 
+Some time after other thread releases the mutex.
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Mutex basics}
+
+\begin{minted}{java}
+interface Lock { 
+    void lock(); 
+    void unlock(); 
+}
+\end{minted}
+
+\begin{itemize}
+    \item Only one contending thread enters critical section. \textbf{Mutual exclusion}.
+    \pause \item Mutex affects thread scheduling.
+\end{itemize}
+
+\pause
+\only<3>{Acquisition order}\only<4>{\textbf{Acquisition order}}, system throughput, observed latency depend on
+\begin{itemize}
+    \item Mutex implementation
+    \item OS scheduling policy
+    \item Non-determinism of CPU timings
+\end{itemize}
+\end{frame}
+
+\input{parts/starvation_animation.tex}
+
+% \begin{frame}[fragile]{Livelock}
+% 
+% TODO: example two whiles try-and-retreat
+% 
+% \end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Mutex basics}
+
+\begin{minted}{java}
+interface Lock { 
+    void lock(); 
+    void unlock(); 
+}
+\end{minted}
+
+\begin{itemize}
+    \item Only one contending thread enters critical section. \textbf{Mutual exclusion}.
+    \item Mutex affects thread scheduling.    
+    \item At least one contending thread enters critical section. \textbf{Deadlock-freedom}.
+    \item Some contending threads could lag. \textbf{No starvation-freedom/fairness by default}.
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Check-then-act}
+
+\begin{minted}{java}
+class ThreadSafeContainer {
+    List a = new ArrayList<>();
+    Lock l = ... ;
+    public void add(Object o) {
+        l.lock(); try { a.add(o); } finally { l.unlock(); }}
+    public boolean contains(Object o) {
+        l.lock(); try { return a.contains(o); } finally { l.unlock(); }}
+    public void addIfAbsent(Object o) {
+        if (!contains(o)) add(o); }
+}
+\end{minted}
+\pause No data race. \pause Inconsistent behaviour due to race condition.
+
+\pause \textbf{Remember: state of concurrent system may have changed since your last inspection}
+\end{frame}
+
+% \begin{frame}[fragile]{Check-then-act + retry == livelock}
+% TODO: maybe homework?
+% \end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Mutex basics}
+\framesubtitle{Summary}
+
+\begin{minted}{java}
+interface Lock { 
+    void lock(); 
+    void unlock(); 
+}
+\end{minted}
+
+\begin{itemize}
+    \item Only one contending thread enters critical section. \textbf{Mutual exclusion}.
+    \item Mutex affects thread scheduling.    
+    \item At least one contending thread enters critical section. \textbf{Deadlock-freedom}.
+    \item Some contending threads could lag. \textbf{No starvation-freedom/fairness by default}.
+    \item Mutex helps to avoid data races, \textbf{does not} magically solves all race conditions.
+\end{itemize}
+
+\end{frame}
+
+
+\questiontime{How to fix \texttt{addIfAbsent(e) = if (!contains(e)) add(e);}?}
+\questiontime{How to fix \texttt{addIfAbsent(e) = if (!contains(e)) add(e);}? 
+
+It it OK to grab the lock in \texttt{addIfAbsent} and then again in \texttt{contains}?}

@@ -1,0 +1,168 @@
+\section{Thread safety}
+\showTOC
+
+\begin{frame}[t,fragile]{Toy problem: thread-safe counter}
+\framesubtitle{Description}
+
+\begin{minted}{java}
+public class Counter {
+    public Counter(long initial) { ... }
+    public void increment() { ... }
+    public long get() { ... }
+}
+\end{minted}
+\end{frame}
+
+\questiontime{What is ''thread-safe''?}
+
+\begin{frame}[noframenumbering,t,fragile]{Toy problem: thread-safe counter}
+\framesubtitle{Description}
+
+\begin{minted}{java}
+public class Counter {
+    public Counter(long initial) { ... }
+    public void increment() { ... }
+    public long get() { ... }
+}
+\end{minted}
+
+Thread-safe -- may be invoked from different threads simultaneously and behave ''normally''.
+
+\pause
+What is normal?
+
+\pause
+\begin{itemize}
+    \item \texttt{get} and \texttt{increment}} are consistent 
+    \item no \texttt{increment} is lost
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Toy problem: thread-safe counter}
+\framesubtitle{Description}
+
+\begin{minted}{java}
+public class Counter {
+    public Counter(long initial) { ... }
+    public void increment() { ... }
+    public long get() { ... }
+}
+\end{minted}
+
+How to handle race conditions?
+
+\pause
+
+How to distinguish user-side misuse from library-side bug?
+
+\end{frame}
+
+\begin{frame}[t,fragile]{Toy problem: thread-safe counter}
+\framesubtitle{Description}
+
+\begin{minted}{java}
+Counter c = new Counter(0);
+Thread t1 = new Thread( () -> { c.increment(); println(c.get()); });
+Thread t2 = new Thread( () -> { c.increment(); println(c.get()); });
+t1.start(); t2.start(); t1.join(); t2.join();
+System.out.println(c.get());
+\end{minted}    
+
+\pause
+Execution 1: \texttt{t1=1 t2=2 main=2}
+
+\pause
+Execution 2: \texttt{t1=2 t2=1 main=2}
+
+\pause
+Execution 3: \texttt{t1=2 t2=2 main=2}
+
+\end{frame}
+
+\begin{frame}[t,fragile]{Concurrent consistency}
+
+\begin{itemize}
+    \item Nothing crashes
+    \pause
+    \item When I run the program, it works as intended
+    \pause
+    \item All operations work ''logically''
+\end{itemize}
+\pause
+Possible formalization: all operations could be treated as ''atomic'' (non-divisible, transactional) and ordered on a single timeline.
+\end{frame}
+
+\questiontime{
+\begin{itemize}
+    \item Concurrently consistent: all operations are ordered on a single timeline 
+    \item Interleaving model: all executed  instructions are totally ordered
+\end{itemize}
+    Does it mean any concurrent data structure is consistent if we use interleaving model?
+}
+
+\begin{frame}[t,fragile,noframenumbering]{Concurrent consistency}
+
+\begin{itemize}
+    \item Nothing crashes    
+    \item When I run the program, it works as intended
+    \item All operations work ''logically''
+\end{itemize}
+
+Possible formalization: all operations (methods of corresponding concurrent data structure class) could be treated as ''atomic'' (non-divisible, transactional) and ordered on single timeline. 
+
+\pause
+There are other approaches, see consistency models in Lecture~\foundationsNum.
+
+\end{frame}
+
+
+\begin{frame}[t]{Toy problem: thread-safe counter}
+\framesubtitle{How to implement?}
+
+Our current requirements:
+\begin{itemize}
+    \item all events (method calls) could be ordered as if they executed sequentially
+    \item in-thread events and operations are ''sequential'', but may be reordered up to ''synchronization points''
+\end{itemize}
+
+\pause
+Synchronization points we know so far:
+\begin{itemize}
+    \item \texttt{Thread.start}
+    \item \texttt{Thread.join}
+\end{itemize}
+
+\end{frame}
+
+\questiontime{If you have only \texttt{Thread.start} and \texttt{Thread.join} as concurrent primitives, how would you implement thread-safe counter?}
+
+\begin{frame}[t,noframenumbering]{Toy problem: thread-safe counter}
+\framesubtitle{How to implement?}
+
+Synchronization points we know so far:
+\begin{itemize}
+    \item \texttt{Thread.start}
+    \item \texttt{Thread.join}
+\end{itemize}
+
+Looks like that is not enough.
+
+\pause
+When some thread executes \texttt{counter.increment}, other threads:
+\begin{itemize}
+        \item allowed to execute \texttt{counter.get}? \pause No, read-write data race!
+        \pause
+        \item allowed to execute \texttt{counter.increment}? \pause No, write-write data race!
+\end{itemize}
+
+\pause
+Conclusion: 
+\begin{itemize}
+  \item avoid concurrent execution of the same code block by different threads (mutual exclusion)
+  \pause
+  \item guard instruction sequences against concurrent modification (code locking)
+  \pause
+  \item guarantee that only one thread may enter some code fragment (critical section)
+\end{itemize}
+\end{frame}

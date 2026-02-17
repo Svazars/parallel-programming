@@ -1,0 +1,51 @@
+
+\subsection{Visibility}
+\showTOCSub
+
+\begin{frame}{Visibility and consistency}
+
+\begin{itemize}
+    \item all \textt{lock} and \texttt{unlock} operations of \textbf{particular mutex} are totally ordered
+    \item intra-thread \textt{lock} and \texttt{unlock} operations of \textbf{all mutexes} are totally ordered
+\end{itemize}
+
+\pause
+Partial orders are tricky\footnote<2->{\url{https://en.wikipedia.org/wiki/Partially_ordered_set}}
+
+\pause
+Synchronization points you know so far:
+\begin{itemize}
+    \item \texttt{Thread.start}
+    \item \texttt{Thread.join}
+    \item \texttt{Lock.lock}
+    \item \texttt{Lock.unlock}
+\end{itemize}
+\end{frame}
+
+\questiontime{It would be \textbf{much} easier to say that all critical sections (code between \texttt{lock} and \texttt{unlock}) of \textbf{all} mutexes have a strict total order.
+
+Why do we use much weaker partial ordering?
+}
+
+\begin{frame}[fragile]{Visibility and consistency}
+\framesubtitle{Insufficient ordering}
+
+\begin{minted}{java}
+static int x, y;
+void threadA() {
+    lock.lock(); try { x = 1; y = 1; } finally { lock.unlock(); }
+}
+void threadB() {
+    lock.lock(); try { x = 2; y = 2; } finally { lock.unlock(); }
+}
+void threadC() {
+    System.out.println(x);
+    System.out.println(y);
+}
+\end{minted}
+
+\pause
+
+Possible result: \texttt{x=2 y=0}
+
+\end{frame}

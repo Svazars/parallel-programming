@@ -1,0 +1,197 @@
+
+\section{Bug prevention}
+\showTOCSub
+
+\begin{frame}[fragile]{Inevitable evil}
+\framesubtitle{''I would never do it''}
+
+\begin{minted}{java}
+threadA() {
+    l1.lock();
+    try {
+        l2.lock();
+        try { ... } finally { l2.unlock(); }
+    } finally { l1.unlock(); }
+}
+threadB() {
+    l2.lock();
+    try {
+        l1.lock();
+        try { ... } finally { l1.unlock(); }
+    } finally { l2.unlock(); }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Inevitable evil}
+\framesubtitle{''Oops!... I did it again''}
+
+\begin{minted}{java}
+void transfer(long sum, Account a, Account b) {
+    a.lock.lock();
+    try {
+        b.lock.lock();
+        try {
+            if (a.withdraw(sum)) {
+                b.add(sum)
+            }
+        } finally { b.lock.unlock(); }
+    } finally { a.lock.unlock(); }
+}
+\end{minted}
+
+\pause
+
+\begin{minted}{java}
+threadA() { transfer(1, A, B); }
+threadB() { transfer(1, B, A); }
+\end{minted}
+\end{frame}
+
+
+\begin{frame}{Deadlock prevention}
+
+\textbf{Ultimate deadlock prevention weapon}
+
+\pause
+
+Do not use blocking methods ;)
+
+\end{frame}
+
+\begin{frame}[t,noframenumbering]{Deadlock prevention}
+\framesubtitle{Wishful thinking}
+
+Minimize attack surface:
+\begin{itemize}    
+    \item Use single lock in the program
+    \pause
+    \item Use recursive locks
+    \pause
+    \item Use single thread in the program    
+    \pause
+    \item Use message passing (copy and transfer) instead of shared mutable state
+    \pause
+    \item Use high-level abstractions (\texttt{stream.parallel.map.collect}) instead of low-level ones (\texttt{mutex.lock/unlock})
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[t,noframenumbering]{Deadlock prevention}
+\framesubtitle{Practice}
+
+Minimize attack surface:
+\begin{itemize}
+    \item Use recursive locks
+    \item Use high-level abstractions and thread-safe classes    
+\end{itemize}
+
+\end{frame}
+
+\questiontime{You have \texttt{private Lock} instance and public \texttt{foo} method. How should you use lock inside method to avoid deadlocks on this instance?}
+
+\begin{frame}[t,noframenumbering]{Deadlock prevention}
+
+Minimizing attack surface:
+\begin{itemize}
+    \item Use high-level abstractions and thread-safe classes
+    \item Use recursive locks
+    \item Do not publish internal locks
+    \item Avoid blocking calls inside critical section (use ''leaf'' locking)
+\end{itemize}
+
+\pause
+
+Specialized techniques:
+\begin{itemize}
+    \item Lock ordering (\texttt{lockA} < \texttt{lockB}). First sort, then lock!
+    \pause \item Locking hierarchies (\texttt{lockA.num = 1}, \texttt{lockB.num = 2}). Always lock greater numbers!
+\end{itemize}
+\pause Requires thinking at design time.
+
+\pause
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.5/readme.markdown}}
+\begin{homeworkmail}{Task \taskEmpireLock}{
+    Open \url{https://deadlockempire.github.io}, pass all ''Locks'' levels.
+}
+\end{homeworkmail}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Dining philosophers problem}
+
+\begin{tikzpicture}[remember picture,overlay]
+\node[xshift=4cm,yshift=-8cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/Dining_philosophers_diagram.jpg}};
+\end{tikzpicture}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.6/readme.md}}
+
+\begin{homeworkcode}{Task~\taskCodeDining}
+    Help them or they will starve to death!
+    \begin{itemize}
+        \item Three levels of difficulty
+        \item Required time grows exponentially
+    \end{itemize}
+\end{homeworkcode}
+
+\end{frame}
+
+
+
+%\questiontime{Locking hierarchy reports deadlock in run-time, on erroneous attempt to ''get lower lock''. Actually it preliminary crashes the program, even if deadlock was not supposed to happen. Why do we call it ''deadlock prevention'' software development technique?}
+
+%\begin{frame}{Lock convoy}
+%
+%
+%First thread arrives to mutex. \pause Owns it. \pause
+%
+%Second thread arrives to mutex. \pause Waits for it. Quantum lost. \pause
+%
+%First thread leaves mutex. \pause Second thread gets ownership. \pause
+%
+%Third thread arrives to mutex. \pause Waits for it. Quantum lost. \pause
+%
+%First thread arrives to mutex. \pause Waits for it. Quantum lost. \pause
+%
+%Second thread leaves mutex ...
+%
+%\end{frame}
+
+\newcommand{\tmpheader}{
+\begin{itemize}
+    \item When you call some code, it could acquire/release arbitrary locks
+    \item When your code is invoked by some thread, that thread could already own arbitrary locks    
+\end{itemize}
+}
+
+\begin{frame}[t]{Design challenges}
+
+\tmpheader
+
+\pause
+
+Composability hell.
+
+\end{frame}
+
+\begin{frame}[t]{Design challenges}
+
+\tmpheader
+
+Trust no one
+\begin{itemize}
+    \item Before calling external code, release all locks
+    \item Avoid using external locks
+    \item Do not expose internal locks
+    \item Start computation in special ''clean'' thread
+\end{itemize}
+
+\pause
+
+But be friendly
+\begin{itemize}
+    \item Document locking policy inside class
+    \item Document locking policy for users
+\end{itemize}
+
+\end{frame}

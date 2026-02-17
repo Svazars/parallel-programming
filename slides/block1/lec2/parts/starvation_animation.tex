@@ -1,0 +1,274 @@
+\begin{frame}[fragile]{Mutual exclusion solved with flags}
+\framesubtitle{Thread A only}
+
+\begin{lstlisting}
+static boolean A_flag = false, B_flag = false;
+static Lock l = ...;
+void raise_X()        { l.lock(); try { X_flag = true;  } finally { l.unlock(); } }
+void lower_X()        { l.lock(); try { X_flag = false; } finally { l.unlock(); } }
+boolean is_raised_X() { l.lock(); try { return X_flag;  } finally { l.unlock(); } }
+\end{lstlisting}
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 18 em,
+    linebackgroundcolor={%      
+      \btLstHL<2>{1}
+      \btLstHL<3>{2}
+      \btLstHL<4>{3}
+      \btLstHL<5>{6}
+      \btLstHL<6>{7}      
+    }]
+public void useful_A() {   
+  raise_A();              // A.1 
+  while (is_raised_B()) { // A.2
+    continue;             // A.3      
+  }
+  critical_section();     // A.4
+  lower_A();              // A.5
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}
+public void useful_B() {   
+  raise_B();              // B.1
+  while (is_raised_A()) { // B.2    
+    lower_B();            // B.3
+    while (is_raised_A());// B.4
+    raise_B();            // B.5
+  }
+  critical_section();     // B.6
+  lower_B();              // B.7
+ }
+\end{lstlisting} \\
+\end{tabular}
+\end{frame}
+
+
+
+
+
+
+
+\begin{frame}[fragile]{Mutual exclusion solved with flags}
+\framesubtitle{Thread B only}
+
+\begin{lstlisting}
+static boolean A_flag = false, B_flag = false;
+static Lock l = ...;
+void raise_X()        { l.lock(); try { X_flag = true;  } finally { l.unlock(); } }
+void lower_X()        { l.lock(); try { X_flag = false; } finally { l.unlock(); } }
+boolean is_raised_X() { l.lock(); try { return X_flag;  } finally { l.unlock(); } }
+\end{lstlisting}
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}
+public void useful_A() {   
+  raise_A();              // A.1 
+  while (is_raised_B()) { // A.2
+    continue;             // A.3      
+  }
+  critical_section();     // A.4
+  lower_A();              // A.5
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 18 em,
+    linebackgroundcolor={%      
+      \btLstHLG<2>{1}
+      \btLstHLG<3>{2}
+      \btLstHLG<4>{3}
+      \btLstHLG<5>{8}
+      \btLstHLG<6>{9}      
+    }]
+public void useful_B() {   
+  raise_B();              // B.1
+  while (is_raised_A()) { // B.2    
+    lower_B();            // B.3
+    while (is_raised_A());// B.4
+    raise_B();            // B.5
+  }
+  critical_section();     // B.6
+  lower_B();              // B.7
+ }
+\end{lstlisting} \\
+\end{tabular}
+
+\end{frame}
+
+
+
+
+
+
+\begin{frame}[fragile]{Mutual exclusion solved with flags}
+\framesubtitle{Contention}
+
+\begin{lstlisting}
+static boolean A_flag = false, B_flag = false;
+static Lock l = ...;
+void raise_X()        { l.lock(); try { X_flag = true;  } finally { l.unlock(); } }
+void lower_X()        { l.lock(); try { X_flag = false; } finally { l.unlock(); } }
+boolean is_raised_X() { l.lock(); try { return X_flag;  } finally { l.unlock(); } }
+\end{lstlisting}
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHL<2-3>{1}
+      \btLstHL<4-5>{2}
+      \btLstHL<6>{3}
+      \btLstHL<7>{4}
+      \btLstHL<8>{3}
+      \btLstHL<9-12>{4}
+      \btLstHL<13>{3}
+      \btLstHL<14>{6}
+      \btLstHL<15>{7}
+    }]
+public void useful_A() {   
+  raise_A();              // A.1 
+  while (is_raised_B()) { // A.2
+    continue;             // A.3      
+  }
+  critical_section();     // A.4
+  lower_A();              // A.5
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<3-4>{1}
+      \btLstHLG<5-9>{2}
+      \btLstHLG<10>{3}
+      \btLstHLG<11>{4}
+      \btLstHLG<12-16>{5}
+      \btLstHLG<17>{6}
+      \btLstHLG<18>{3}
+      \btLstHLG<19>{8}
+    }]
+public void useful_B() {   
+  raise_B();              // B.1
+  while (is_raised_A()) { // B.2    
+    lower_B();            // B.3
+    while (is_raised_A());// B.4
+    raise_B();            // B.5
+  }
+  critical_section();     // B.6
+  lower_B();              // B.7
+ }
+\end{lstlisting} \\
+\end{tabular}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Mutual exclusion and deadlock-freedom}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.2/readme.markdown}}
+
+\begin{homeworkmail}{Task \taskProofMutex}
+    Prove that algorithm on previous slide guarantees mutual exclusion for 2 threads.
+    Assume it is not and get a contradiction.
+}
+\end{homeworkmail}
+
+\begin{homeworkmail}{Task \taskProofDeadlockFreedom}
+    Prove that algorithm on previous slide is free of deadlocks.   
+}
+\end{homeworkmail}
+
+\textbf{Suggested reading}: use companion slides for ''Herlihy, Shavit: The Art of Multiprocessor Programming''\footnote{\url{https://booksite.elsevier.com/9780123973375}}, Lecture slides, Chapter 01, slides 43-72.
+
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Mutex basics}
+
+\begin{minted}{java}
+interface Lock { 
+    void lock(); 
+    void unlock(); 
+}
+\end{minted}
+
+\begin{itemize}
+    \item Only one contending thread enters critical section. \textbf{Mutual exclusion}.
+    \item Mutex affects thread scheduling.    
+    \item At least one contending thread enters critical section. \textbf{Deadlock-freedom}.
+\end{itemize}
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]{Mutual exclusion solved with flags}
+\framesubtitle{Starvation}
+
+\only<23->  {\textbf{Starvation}: user of concurrent object \textit{could} be delayed for \textit{arbitrary} time if there are other users of the same object.} \only<24->  {\textbf{Unfair mutex}: current thread starves, whole system progresses. }
+
+\begin{tabular}{p{7cm}p{7cm}}
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHL<2-3>{1}
+      \btLstHL<4-5>{2}
+      \btLstHL<6-9>{3}
+      \btLstHL<10>{6}
+      \btLstHL<11>{7}
+      \btLstHL<12-13>{1}
+      \btLstHL<14>{2}
+      \btLstHL<15-18>{3}
+      \btLstHL<19>{6}
+      \btLstHL<20>{7}
+    }]
+public void useful_A() {   
+  raise_A();              // A.1 
+  while (is_raised_B()) { // A.2
+    continue;             // A.3      
+  }
+  critical_section();     // A.4
+  lower_A();              // A.5
+ }
+    \end{lstlisting}
+        
+          &
+    \begin{lstlisting}[
+    linebackgroundwidth = 16 em,
+    linebackgroundcolor={%
+      \btLstHLG<3-4>{1}
+      \btLstHLG<5-6>{2}
+      \btLstHLG<7>{3}
+      \btLstHLG<8>{4}
+      \btLstHLG<9-12>{5}
+      \btLstHLG<13-15>{6}
+      \btLstHLG<16>{3}
+      \btLstHLG<17>{4}
+      \btLstHLG<18-20>{5}
+    }]
+public void useful_B() {   
+  raise_B();              // B.1
+  while (is_raised_A()) { // B.2    
+    lower_B();            // B.3
+    while (is_raised_A());// B.4
+    raise_B();            // B.5
+  }
+  critical_section();     // B.6
+  lower_B();              // B.7
+ }
+\end{lstlisting} \\
+\end{tabular}
+
+\only<1-9>  {\texttt{Thread A acquisitions: 0, Thread B acquisitions: 0}}
+\only<10-18>{\texttt{Thread A acquisitions: 1, Thread B acquisitions: 0}}
+\only<19-21>{\texttt{Thread A acquisitions: 2, Thread B acquisitions: 0}}
+\only<22>   {\texttt{Thread A acquisitions: N, Thread B acquisitions: 0}}
+
+\end{frame}
+
+\questiontime{What is the difference between \textbf{deadlock-freedom} and \textbf{starvation-freedom}?}

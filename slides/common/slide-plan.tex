@@ -8,54 +8,58 @@
 \newcommand{\introKey}{concurrency, parallelism, agents, threads, scheduler, threading models, interleaving execution,  Amdahl's law, race condition, data race, deadlock, wait-for graph}
 
 \newcommand{\basicNum}{2}
-\newcommand{\basicTopic}{basic concepts}
-\newcommand{\basicKey}{mutex, acquisition order, reentrancy, fairness, data locking, code locking, signalling, condition variable, lost signal, spurious wakeup}
+\newcommand{\basicTopic}{mutual exclusion}
+\newcommand{\basicKey}{thread safety, concurrent consistency, mutual exclusion, critical section, deadlock-freedom, starvation, fairness, check-then-act, reentrancy, admission policy, code locking, data locking, lock splitting, lock ordering, dining philosophers problem}
 
-\newcommand{\syncPrimitivesNum}{3}
+\newcommand{\basicTwoNum}{3}
+\newcommand{\basicTopic}{signalling}
+\newcommand{\basicKey}{signalling, condition variable, lost signal, spurious wakeup}
+
+\newcommand{\syncPrimitivesNum}{4}
 \newcommand{\syncPrimitivesTopic}{advanced synchronization primitives}
 \newcommand{\syncPrimitivesKey}{monitor, latch, barrier, thundering herd, semaphore, read-write lock, thread pool, executor, producer-consumer, fork-join, load balancing}
 
-\newcommand{\patternsNum}{4}
+\newcommand{\patternsNum}{5}
 \newcommand{\patternsTopic}{advanced synchronization concepts}
 \newcommand{\patternsKey}{interruption, cancellation, partitioning, privatization, replication, thread-local, ownership}
 
-\newcommand{\extraBasicsNum}{5}
+\newcommand{\extraBasicsNum}{6}
 \newcommand{\extraBasicsTopic}{additional topics of practical concurrency}
 \newcommand{\extraBasicsKey}{documenting protocols and classes, checking concurrent invariants, stress testing, execution trace analysis, estimating required testing effort, static and dynamic checks, scheduling randomization, model checking}
 
-\newcommand{\foundationsNum}{6}
+\newcommand{\foundationsNum}{7}
 \newcommand{\foundationsTopic}{theoretical foundations of concurrency}
 \newcommand{\foundationsKey}{timeline, events, precedence, 2-thread mutual exclusion, deadlock freedom, starvation freedom, N-thread mutual exclusion, sequential objects and specifications, concurrent objects, linearizability}
 
-\newcommand{\foundationsPlusNum}{7}
+\newcommand{\foundationsPlusNum}{8}
 \newcommand{\foundationsPlusTopic}{progress guarantees, concurrent operations hierarchy, consensus number}
 \newcommand{\foundationsPlusKey}{obstruction-free, lock-free, wait-free, safe register, regular register, atomic register, register snapshot, consensus number}
 
-\newcommand{\atomicsNum}{8}
+\newcommand{\atomicsNum}{9}
 \newcommand{\atomicsTopic}{introduction to atomics}
 \newcommand{\atomicsKey}{read-modify-write, get-and-add, compare-and-swap, spin lock, lock-free stack, ABA problem}
 
 % TODO: taxonomy of queues, 
 
-\newcommand{\cacheCoherencyNum}{9}
+\newcommand{\cacheCoherencyNum}{10}
 \newcommand{\cacheCoherencyTopic}{cache coherency}
 \newcommand{\cacheCoherencyKey}{cache memory hierarchy, cache coherency protocol, store-buffer, load-buffer, invalidate-queue, memory barrier, hardware memory model, weak memory model, litmus tests}
 
-\newcommand{\langMMNum}{10}
+\newcommand{\langMMNum}{11}
 \newcommand{\langMMTopic}{language memory model}
 \newcommand{\langMMKey}{compiler optimizations, compiler barriers, language memory model, strict consistency, threads cannot be implemented as a library, visibility, volatile}
 
-\newcommand{\advancedConcurrencyNum}{11}
+\newcommand{\advancedConcurrencyNum}{12}
 \newcommand{\advancedConcurrencyTopic}{advanced locking}
 \newcommand{\advancedConcurrencyKey}{Anderson Queue Lock, CLH, MCS, check-then-act, spin-then-park}
 
 % TODO: work distribution, work stealing, taxonomy of parallel problems, single LIFO cell optimization, RAT
 
-\newcommand{\userSpaceThreadingNum}{12}
+\newcommand{\userSpaceThreadingNum}{13}
 \newcommand{\userSpaceThreadingTopic}{user-space threading}
 \newcommand{\userSpaceThreadingKey}{berkley socket, blocking and non-blocking IO, callback-hell, async-await, continuation-passing-style, fibers/coroutines/green threads, stackful vs stackless}
 
-\newcommand{\concurrentQueuesNum}{13}
+\newcommand{\concurrentQueuesNum}{14}
 \newcommand{\concurrentQueuesNumTopic}{concurrent queues}
 \newcommand{\concurrentQueuesNumKey}{queue as mutex, strong FIFO, per-producer FIFO, bounded/unbounded queue, SPSC, MPSC, SPMC, MPMC, total/partial/synchronous API, lock-free queue, ring buffer for bounded queues, concurrent dequeue, work stealing}
 

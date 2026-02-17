@@ -1,0 +1,109 @@
+
+\section{Patterns}
+\subsection{Code locking}
+\showTOCSub
+
+\begin{frame}[fragile]{Code locking}
+
+\begin{minted}{java}
+    enum Grade { A, B, C, FAIL }
+    static long grades[] = new long[Grade.values().length()];
+    public static void gradeStudent(Grade g) {
+        grades[g.ordinal()]++;
+    }
+\end{minted}
+
+How to make \texttt{gradeStudent} thread-safe?
+
+\pause
+\begin{minted}{java}
+    static Lock lock = new ReentrantLock();
+    public static void gradeStudent(Grade g) {
+        lock.lock(); 
+        try { 
+            grades[g.ordinal()]++; 
+        } finally { 
+            lock.unlock(); 
+        }
+    }
+\end{minted}
+\end{frame}
+
+\subsection{Data locking}
+
+\begin{frame}[fragile]{Data locking}
+
+\begin{minted}{java}
+    public static void gradeStudent(Grade g) {
+        lock.lock(); 
+        try {
+            grades[g.ordinal()]++; 
+        } finally { 
+            lock.unlock(); 
+        }
+    }
+\end{minted}
+
+How to make program more scalable?
+
+\pause
+
+\begin{minted}{java}
+    static Counter[] grades = new ThreadSafeCounter[Grade.values().length];
+    public static void gradeStudent(Grade g) {
+        grades[g.ordinal()].increment();
+    }
+\end{minted}
+
+\end{frame}
+
+%\questiontime{In Java, every method is attached to the object instance which is actually data. Should not we always use ''Data locking'' terminology?}
+
+%\questiontime{In Java, every method is written in bytecode so effectively we are guarding some code fragment. Should not we always use ''Code locking'' terminology?}
+
+\subsection{Lock splitting}
+
+\begin{frame}[fragile]{Lock splitting}
+
+\begin{minted}{java}
+    static int[] passedExams = new int[StudentList.size()]; // millions!
+    static Lock lock = new Lock();
+    public static void pass(Student s) {
+        lock.lock();
+        try { 
+            passedExams[s.number()]++; 
+        } finally { 
+            lock.unlock(); 
+        }
+    }
+\end{minted}
+
+\pause
+Assume we cannot afford to allocate millions of \texttt{ThreadSafeCounter} instances.
+
+\pause
+Divide-and-conquer using arbitrary granularity.
+
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Lock splitting}
+
+\begin{minted}{java}
+    static int[] passedExams = new int[StudentList.size()]; // millions!
+    static Lock[] locks = new Lock[1 + (passedExams.length / 1_000)];
+    public static void pass(Student s) {
+        int sNum = s.number();
+        int lockNum = sNum / 1_000;
+        Lock lock = locks[lockNum];
+        lock.lock();
+        try { 
+            passedExams[sNum]++; 
+        } finally { 
+            lock.unlock(); 
+        }}
+\end{minted}
+
+\pause
+Task~\taskCounters, Medium level: {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/2.4/readme.markdown}}
+
+\end{frame}
