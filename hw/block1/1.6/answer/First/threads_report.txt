@@ -1,0 +1,8 @@
+"main" #1 prio=5 os_prio=0 cpu=125,49ms elapsed=51,76s tid=0x000074ce44028000 nid=0x1fc3 in Object.wait()  [0x000074ce4adfe000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait(java.base@11.0.30/Native Method)
+	- waiting on <0x0000000718b069b0> (a java.lang.Thread)                          // main waits main. Deadlock!
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1300)
+	- waiting to re-lock in wait() <0x0000000718b069b0> (a java.lang.Thread)
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1375)
+	at SingleThreaded.main(SingleThreaded.java:3)                                   // main calls main.join()
