@@ -1,687 +1,444 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
-\title[]{Lecture \syncPrimitivesNum: \syncPrimitivesTopic}
-\subtitle[]{\syncPrimitivesKey}
+\title[]{Lecture \basicTwoNum: \basicTwoTopic}
+\subtitle[]{\basicTwoKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
 
 \date{}
-
-\newcommand{\taskRewritePhilosophers}{3.1}
-
 
 \begin{document}
 
 \begin{frame}
   \titlepage
-  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l3.pdf}
+    \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l3.pdf}
 \end{frame}
 
-\begin{frame}{In previous episode}
+\begin{frame}{In previous episodes}
 
-We study communication and coordination of different threads in pre-emptive multitasking OS, execution speed is not under our control.
-
-We know the following tools:
-\begin{itemize}
-    \item \texttt{Thread.start}, \texttt{Thread.join}, \texttt{ReentrantLock}, \texttt{Lock}, \texttt{Condition}
-\end{itemize}
-
-We are focusing on the following properties:
-\begin{itemize}
-    \item Safety, Liveness, Performance
-\end{itemize}
-
-For any new concept we must understand
-\begin{itemize}
-    \item Granularity of coordination (race conditions, level of parallelism)
-    \item Blocking API (deadlocks)
-    \item Admission policy (fairness, progress)
-    \item Locking policy (visibility issues, data races)
-    \item Signal send-receive conditions (lost signal, spurious wakeup)
-\end{itemize}
-
-We are focusing on high-level policies rather than particular synchronization mechanisms (until Lecture~\advancedConcurrencyNum).
-
+\begin{itemize} 
+ \item Every thread has its own speed and scenario of execution
+ \item We expect OS could pre-empt any thread at any time
+ \item Interleaving model thread-safety: all operations with data structure 
+ \begin{itemize} 
+    \item are non-overlapping intervals on single timeline
+    \item are consistent with each other in single-threaded sense
+ \end{itemize} 
+ \item \textbf{Mutual exclusion}: not more than one thread in critical section
+ \item \textbf{Deadlock-freedom}: some thread eventually enters critical section
+ \item \textbf{Starvation-freedom}: every thread eventually enters critical section
+ \item Mutex design space: reentrancy, admission policy, fairness 
+ \item Mutex patterns: code locking, data locking, lock splitting
+ \item Mutex best practices: recursive locks, encapsulation, leaf locking
+ \item Documentation is you best friend
+ \end{itemize}
 \end{frame}
 
 \begin{frame}{Lecture plan}
 \tableofcontents
 \end{frame}
 
-\begin{frame}[t]{Disclaimer}
+\section{Decoupling tasks from threads}
+\subsection{Executor}
 
-Concurrent programming is evolving branch of Computer Science.
+\begin{frame}[t,fragile]{Useful interfaces}
 
-\pause
-
-There are many designs for key synchronization primitives:
-
-\begin{itemize}
-    \item ''Monitor classification'' by Buhr et al\footnote<2->{\tiny\url{https://dl.acm.org/doi/10.1145/214037.214100}}
-    \item ''Semaphores in Plan 9'' by Mullender and Cox\footnote<2->{\tiny\url{https://swtch.com/semaphore.pdf}}
-    \item ''Futexes are tricky'' by Drepper\footnote<2->{\tiny\url{https://www.semanticscholar.org/paper/Futexes-Are-Tricky-Drepper/86253463161f45ea013a501f89c8de36f1a09192}}
-\end{itemize}
-
-\pause
-We will stick to the Java programming language (built-in monitors) and \texttt{java.util.concurrent} package.
-
-\pause
-It is enough to illustrate design space, trade-offs, common correctness problems.
-
-\pause
-It is \textbf{not} enough to start concurrency-oriented low-level development in other languages (e.g. C++ stdlib/boost, Golang with plan9 style sema etc).
-
-\end{frame}
-
-\section{Monitor}
-\showTOC
-
-
-\begin{frame}[fragile]{Java monitor}
-\framesubtitle{Design}
-
-Effectively \texttt{ReentrantLock + single Condition}
-
-\begin{itemize}
-    \item \texttt{MonitorEnter}
-    \item \texttt{MonitorExit}
-    \item \texttt{wait}
-    \item \texttt{notify}
-    \item \texttt{notifyAll}
-\end{itemize}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=3.5cm,yshift=-2.5cm] at (current page.center) {\includegraphics[width=0.27\textwidth]{./pics/MonitorJava.png}};
-\end{tikzpicture}
-
-\end{frame}
-
-\begin{frame}[fragile]{Java monitor}
-\framesubtitle{For every object}
-
-\textbf{Every} Java object have associated built-in monitor.
-
+Runnable\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Runnable.html}}
 \begin{minted}{java}
-  Object x = new Object();
-  synchronized(x) {
-    x.wait();
-    x.notifyAll();
-  }
-\end{minted}
-
-Special keyword: \texttt{synchronized} (no \texttt{.lock/unlock}, no try-finally, always structured)
-
-Note: \texttt{Condition} and \texttt{ReentrantLock} are Java objects and they have built-in monitor.
-
-Library-level synchronization and language-level synchronization are \textbf{independent}, do not mix \texttt{notify/signal} and \texttt{wait/await}.
-
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Java monitor}
-\framesubtitle{For every method}
-
-\textbf{Every} Java method could be marked as \texttt{synchronized}.
-\begin{minted}{java}
-  public void foo() { doStuff(); }
-  public synchronized void bar() { doStuffUnderMutex(); }
-\end{minted}
-
-It synchronizes on \texttt{this} (instance methods) or \texttt{Class<?>} (static methods):
-\begin{minted}{java}
-  public synchronized void fooSignature() { doStuff(); }
-  public void fooInternal() {
-    synchronized(this) {
-        doStuff();
-    }
-  }
-\end{minted}
-
-\end{frame}
-
-\questiontime{Is it good or bad to mark methods as thread-safe (\texttt{synchronized} on publicly available signature level?)}
-
-\begin{frame}[t,fragile,noframenumbering]{Java monitor}
-\framesubtitle{For every method}
-
-\textbf{Every} Java method could be marked as \texttt{synchronized}.
-\begin{minted}{java}
-  public void foo() { doStuff(); }
-  public synchronized void bar() { doStuffunderMutex(); }
-\end{minted}
-
-It synchronizes on \texttt{this} (instance methods) or \texttt{Class<?>} (static methods):
-\begin{minted}{java}
-  public synchronized void fooSignature() { doStuff(); }
-  public void fooInternal() {
-    synchronized(this) {
-        doStuff();
-    }
-  }
-\end{minted}
-
-Remember that inheritance or \texttt{synchronized(myAwesomeClassInstance)} may break your locking policy and cause a deadlock.
-
-It is common pattern to use \texttt{private final Object lock} and do not expose it as public API.
-\end{frame}
-
-
-\begin{frame}[fragile]{Java monitor}
-\framesubtitle{Single-producer single-consumer bounded queue}
-
-\begin{minted}{java}
-static Dequeue<Object> buffer = ...
-void producer(Object e) {
-    synchronized(buffer) {
-        while (buffer.size() > N) { buffer.wait(); }
-        buffer.offer(e); buffer.notify();
-    }
-}
-Object consumer() {
-    synchronized(buffer) {
-        while (buffer.isEmpty()) { buffer.wait(); }
-        buffer.notify();
-        return buffer.poll(); 
-    }
+interface Runnable {
+    void run();
 }
 \end{minted}
 
+\begin{itemize}
+    \item separate task (\textbf{what} to do) from environment (\textbf{where} to do)
+\end{itemize}
 \end{frame}
 
-\begin{frame}[t]{Java monitor}
-\framesubtitle{Common pitfalls}
+\questiontime{\texttt{Runnable.run} should be thread-safe?}
 
-\end{frame}
+\begin{frame}[t,fragile,noframenumbering]{Useful interfaces}
 
-\questiontime{Name 3 key properties that you should understand for any concurrent object}
-
-
-\begin{frame}[t,noframenumbering]{Java monitor}
-\framesubtitle{Common pitfalls}
-
-Correctness(safety):
+\begin{minted}{java}
+    interface Runnable { void run(); }
+\end{minted}
 \begin{itemize}
-    \item Blocking \texttt{MonitorEnter}, \texttt{wait} -- deadlock, locking order
-    \item Reentrant
-    \item Visibility/consistency -- \texttt{synchronized} looks like ''atomic transaction''
-    \item Lost signal
-    \item Predicate invalidation
-    \item Spurious wakeup
+    \item separate task (\textbf{what} to do) from environment (\textbf{where} to do)
 \end{itemize}
-
-Progress(liveness):
-\begin{itemize}
-    \item Admission policy for \texttt{MonitorEnter}/\texttt{MonitorExit} is not specified
-    \item Admission policy for \texttt{wait}/\texttt{notify} is not specified
-\end{itemize}
-
-Performance:
-\begin{itemize}
-    \item Lock convoy
-    \item Thundering herd \pause (what is it?)
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t]{Java monitor}
-\framesubtitle{Specific pitfalls}
-
-Unintended encapsulation breach:
-\begin{itemize}
-    \item \texttt{synchronized} methods inheritance
-    \item \texttt{synchronized} on object outside of library method
-\end{itemize}
-
-Solution: \texttt{private} guards
-\
-\
-\
 
 \pause
 
-Unintended mix of \texttt{java.util.concurrent} and built-in synchronization:
+ThreadFactory\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ThreadFactory.html}}
+
+\begin{minted}{java}
+interface ThreadFactory {
+  Thread newThread(Runnable r);
+}
+\end{minted}
+
 \begin{itemize}
-    \item \texttt{wait} vs \texttt{await}
-    \item \texttt{synchronized} vs \texttt{lock/unlock}
+    \item separate environment (\textbf{what} available) from particular thread (\textbf{who} will do)
+\end{itemize}
+\end{frame}
+
+\questiontime{\texttt{ThreadFactory.newThread} that returns ''previously used'' \texttt{Thread} instance: what are pros and cons?}
+
+\begin{frame}[t,fragile,noframenumbering]{Useful interfaces}
+
+\begin{minted}{java}
+    interface Runnable { void run(); }
+\end{minted}
+\begin{itemize}
+    \item separate task (\textbf{what} to do) from environment (\textbf{where} to do)
 \end{itemize}
 
-Solution: static analysis (FindBugs/InteliJ IDEA)
+\begin{minted}{java}
+    interface ThreadFactory { Thread newThread(Runnable r); }
+\end{minted}
+
+\begin{itemize}
+    \item separate environment (\textbf{what} available) from particular thread (\textbf{who} will do)
+\end{itemize}
+
+\pause
+
+Executor\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Executor.html}}
+
+\begin{minted}{java}
+interface Executor {
+  void execute(Runnable command);
+}
+\end{minted}
+
+\begin{itemize}
+    \item separate task submission (\textbf{how} distribute work) from the mechanics of how each task will be run (\textbf{who} will do, \textbf{when} will do)
+\end{itemize}
 
 \end{frame}
 
-\begin{frame}{Java monitor}
-\framesubtitle{Rules of thumb}
+\questiontime{\texttt{Executor.execute} that performs task in the caller thread is OK?}
 
-Mutual exclusion
+\begin{frame}[t,fragile]{Using executor}
+\begin{minted}{java}
+  Executor executor = anExecutor();
+  executor.execute(new RunnableTask1());
+  executor.execute(new RunnableTask2());
+\end{minted}
+\end{frame}
+
+\questiontime{Do we need to use locks when using properly implemented thread-safe \texttt{Executor}?}
+
+\begin{frame}[t,fragile]{Using executor}
+
+\begin{minted}{java}
+static long total = 0;
+static Lock lock = new ReentrantLock();
+static long compute(long input) { ... }
+static void foo() {
+  Executor executor = anExecutor();
+  executor.execute( () -> {
+        long tmp = compute(1);
+        lock.lock(); try { total += tmp; } finally { lock.unlock(); }
+  });
+  executor.execute( () -> {
+        long tmp = compute(2);
+        lock.lock(); try { total += tmp; } finally { lock.unlock(); }
+  });
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{ThreadPerTaskExecutor}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutor implements Executor {
+  private final ThreadFactory factory;
+  public ThreadPerTaskExecutor(ThreadFactory f) {
+    factory = f;
+  }
+  public void execute(Runnable r) {
+    factory.newThread(r).start();
+  }
+}
+\end{minted}
+\end{frame}
+
+\questiontime{\texttt{Executor.execute} declares ''fire-and-forget'' API. Is it enough?}
+
+\subsection{ExecutorService}
+\showTOCSub
+
+\begin{frame}[t,fragile]{Even more useful interfaces}
+
+Callable<V>\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Callable.html}}
+\begin{minted}{java}
+interface Callable<V> {
+  V call() throws Exception;
+}
+\end{minted}
+
 \begin{itemize}
-    \item If you need ''just mutex'' -- consider using encapsulated object + \texttt{synchronized}
+    \item computation has 2 possible outcomes: value \texttt{V} or exception
+\end{itemize}
+\end{frame}
+
+\questiontime{some thread experienced uncaught exception. Should we \texttt{exit} our program?}
+
+\begin{frame}[t,fragile]{Even more useful interfaces}
+
+\begin{minted}{java}
+    interface Callable<V> { V call() throws Exception; }
+\end{minted}
+
+\begin{itemize}
+    \item computation has 2 possible outcomes: value \texttt{V} or exception
+\end{itemize}
+
+\pause
+
+Future<V>\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Future.html}}
+\begin{minted}{java}
+interface Future<V> {
+  V get();
+  boolean isDone();
+}
+\end{minted}
+
+\begin{itemize}
+    \item represents the result of an asynchronous computation
+\end{itemize}
+\end{frame}
+
+\questiontime{what should \texttt{Future.get} return for \texttt{Callable<V>} that failed with exception?}
+
+\begin{frame}[t,fragile,noframenumbering]{Even more useful interfaces}
+
+\begin{minted}{java}
+    interface Callable<V> { V call() throws Exception; }
+\end{minted}
+
+\begin{itemize}
+    \item computation has 2 possible outcomes: value \texttt{V} or exception
+\end{itemize}
+
+\begin{minted}{java}
+    interface Future<V> { 
+        V get();
+        boolean isDone(); 
+    }
+\end{minted}
+
+\begin{itemize}
+    \item represents the result of an asynchronous computation
+    \item throws \texttt{ExecutionException} if the computation threw an exception
+\end{itemize}
+
+\pause
+
+\textbf{Reminder}: \texttt{Thread.join} does not propagate exceptions (see Task 1.1)
+
+\end{frame}
+
+
+\begin{frame}[fragile]{ExecutorService: beginning}
+
+ExecutorService\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ExecutorService.html}}
+
+\begin{minted}{java}
+interface ExecutorService extends Executor {
+  void execute(Runnable command);
+  <T> Future<T> submit(Callable<T> task);
+  <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks);
+}
+\end{minted}
+
+\begin{itemize}
+    \item features asynchronous computation
+    \item allows bulk submission of tasks
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Reminder: ThreadPerTaskExecutor}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutor implements Executor {
+  private final ThreadFactory factory;
+  public ThreadPerTaskExecutor(ThreadFactory f) { factory = f; }
+  public void execute(Runnable r) { factory.newThread(r).start(); }
+}
+\end{minted}
+
+\pause
+\texttt{ThreadPerTaskExecutor}\textbf{Service}:
+\begin{itemize}
+    \item features asynchronous computation (\texttt{submit} returns \texttt{Future})
+    \item allows bulk submission of tasks (\texttt{submit(Collection)})
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {
+  private final ThreadFactory factory;
+  public ThreadPerTaskExecutorService(ThreadFactory f) { factory = f; }
+  public void execute(Runnable r) { 
+    ???
+  }
+  <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) {
+    ???
+    ???
+    ???
+  }
+  <T> Future<T> submit(Callable<T> task) {
+    ???
+  }}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {
+  private final ThreadFactory factory;
+  public ThreadPerTaskExecutorService(ThreadFactory f) { factory = f; }
+  public void execute(Runnable r) { 
+    this.submit(() -> { r.run(); return null });
+  }  
+  <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) {
+    ???
+    ???
+    ???
+  }
+  <T> Future<T> submit(Callable<T> task) {
+    ???
+  }}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {
+  private final ThreadFactory factory;
+  public ThreadPerTaskExecutorService(ThreadFactory f) { factory = f; }
+  public void execute(Runnable r) { 
+    this.submit(() -> { r.run(); return null });
+  }
+  <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) {
+    var result = new ArrayList<Future<T>>();
+    for (var t : tasks) { result.add(this.submit(t)); }
+    return result;
+  }
+  <T> Future<T> submit(Callable<T> task) {
+    ???
+  }}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile]{ThreadPerTaskExecutorService + JoinFuture}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {    
+  <T> Future<T> submit(Callable<T> task) {
+    ???
+    ???
+    ???
+    ???
+  }
+}
+
+
+
+
+
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService + JoinFuture}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {    
+  <T> Future<T> submit(Callable<T> task) {
+    var future = new JoinFuture();
+    future.thread = factory.newThread(() -> { future.result = task.call(); });
+    future.thread.start();
+    return future;        
+  }
+}
+
+
+
+
+
+
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService + JoinFuture}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {    
+  <T> Future<T> submit(Callable<T> task) {
+    var future = new JoinFuture();
+    future.thread = factory.newThread(() -> { future.result = task.call(); });
+    future.thread.start();
+    return future;        
+  }
+}
+class JoinFuture<V> implements Future<V> {
+  Thread thread; 
+  V result;
+  public V get() { ??? }
+  public boolean isDone() { ??? }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{ThreadPerTaskExecutorService + JoinFuture}
+
+\begin{minted}{java}
+class ThreadPerTaskExecutorService implements ExecutorService {    
+  <T> Future<T> submit(Callable<T> task) {
+    var future = new JoinFuture();
+    future.thread = factory.newThread(() -> { future.result = task.call(); });
+    future.thread.start();
+    return future;        
+  }
+}
+class JoinFuture<V> implements Future<V> {
+  Thread thread; 
+  V result;
+  public V get() { thread.join(); return result; }
+  public boolean isDone() { return !thread.isAlive(); }
+}
+\end{minted}
+\end{frame}
+
+\questiontime{there are no locks to guard \texttt{JoinFuture.thread} and \texttt{JoinFuture.result}. Is it OK?}
+
+\begin{frame}[t,fragile]{ThreadPerTaskExecutorService + JoinFuture = Homework}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/3.1/readme.markdown}}
+\begin{homeworkmail}{Task 3.1}
     \begin{itemize}
-        \item Save your time with try-finally
-        \item Other stuff (built-ins have better monitoring and optimizer-friendly) is debatable
+        \item Implement \texttt{ThreadPerTaskExecutorService}
+        \item Implement \texttt{JoinFuture} that properly supports exceptions
     \end{itemize}
-
-    \pause
-
-    \item Use \texttt{Lock} if you need ''advanced'' properties:
-    \begin{itemize}
-        \item Fairness (remember, scheduling is counter-intuitive)
-        \item Non-structured locking (remember, exceptions are hard)
-        \item Polling via \texttt{tryLock} (remember, race conditions are tricky)
-    \end{itemize}
-\end{itemize}
-
-\pause
-Signalling\pause. The story is absolutely the same.
-
-Built-in monitors are ''friendlier'' yet less flexible.
-
-\end{frame}
-
-\begin{frame}{Java monitor}
-\framesubtitle{Must-know tool}
-
-Monitor is basic universal building block for concurrent primitives and protocols.
-
-\pause
-
-\begin{homeworkmail}{}{
-    Implement every concurrent primitive presented in this course using built-in Java monitor(s). This task is \textbf{not} graded, but your questions are welcome!
-}
 \end{homeworkmail}
-
-\pause
-
-Monitor combines \textbf{mutual exclusion} and \textbf{signalling} allowing you to make infinite amount of 
-\begin{itemize}
-    \pause
-    \item concurrent design mistakes
-    \pause
-    \item bugs 
-    \pause
-    \item performance regressions
-\end{itemize}
-
-\pause
-
-Make yourself a favour -- learn basics and then progress on advanced stuff.
-
 \end{frame}
 
-\section{Broadcast}
-\showTOC
+\questiontime{what are negative sides for starting brand new thread for every submitted task?}
 
-\begin{frame}[t]{Signalling: broadcast}
-
-\texttt{Lock+Condition} and \texttt{Monitor} provide \texttt{notifyAll}.
-\end{frame}
-
-\questiontime{Does \texttt{notifyAll} or \texttt{signalAll} actually force all waiting threads to wake-up?}
-
-\begin{frame}[t,noframenumbering]{Signalling: broadcast}
-
-\texttt{Lock+Condition} and \texttt{Monitor} provide \texttt{notifyAll}.
-
-Effectively threads are ''released'' one-by-one, since they are forced to enter critical section.
-
-\pause
-What should we do to perform ''massive release''?
-
-\pause
-Use specialized tools!
-\end{frame}
-
-
-\subsection{CountDownLatch}
+\subsection{Thread pooling}
 \showTOCSub
 
-\begin{frame}[fragile]{CountDownLatch}
-
-\begin{center}
-\includegraphics[width=0.8\textwidth]{./pics/horse_race.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{CountDownLatch}
-
-CountDownLatch\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CountDownLatch.html}}
-
-\begin{minted}{java}
-  CountDownLatch(int count)
-  void await()     // awaits counter == 0
-  void countDown() // counter = max(counter - 1, 0)
-  long getCount()  // return counter
-\end{minted}
-
-Common usage patterns:
-\begin{itemize}
-    \item \texttt{CountDownLatch(1)} acts as a ''gate'':
-    \begin{itemize}
-      \item \textbf{closed} (\texttt{counter == 1}) 
-      \item \textbf{open} (\texttt{counter == 0})
-     \end{itemize}
-
-    \item \texttt{CountDownLatch(N)} acts as a ''all threads ready'' point:
-    \begin{itemize}
-      \item \textbf{not-yet-ready} (\texttt{counter > 0})
-      \item \textbf{ready} (\texttt{counter == 0})
-     \end{itemize}
-\end{itemize}
-
-%HW: implement via single monitor
-%HW: a queue with personal monitors for broadcast
-\end{frame}
-
-
-\begin{frame}[fragile]{CountDownLatch}
-\framesubtitle{Example}
-
-\begin{minted}{java}
-static CountDownLatch ready = new CountDownLatch(N + 1);
-static CountDownLatch start = new CountDownLatch(1);
-main() {
-    for (i = 0; i < N; i++) new Thread(new Worker(i)).start();
-    ready.countDown(); ready.await();
-    start.countDown();
-}
-worker() {
-    prepare();
-    ready.countDown();
-    start.await();
-}
-\end{minted}
-\end{frame}
-
-
-\subsection{CyclicBarrier}
-\showTOCSub
-
-\begin{frame}[t,fragile]{CyclicBarrier}
-
-\texttt{CountDownLatch} is single-use because counter monotonically decreases. 
-
-Some tasks require \texttt{N} iterations of some parallel activity before completion.
-\end{frame}
-
-\questiontime{Provide examples of parallelizable tasks that consist of \texttt{N} repeating steps.}
-
-
-\begin{frame}[t,fragile,noframenumbering]{CyclicBarrier}
-
-\texttt{CountDownLatch} is single-use because counter monotonically decreases. 
-
-Some tasks require \texttt{N} iterations of some parallel activity before completion.
-
-Creating \texttt{ArrayList<CountDownLatch>} is cumbersome.
-
-\end{frame}
-
-
-\begin{frame}[fragile]{CyclicBarrier}
-
-CyclicBarrier\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CyclicBarrier.html}}
-
-\begin{minted}{java}
-  CyclicBarrier(int parties, Runnable barrierAction)
-  int await()     
-  int getNumberWaiting()  
-  int getParties()    
-\end{minted}
-
-Common usage patterns: mostly-parallel tasks with sequential coordination
-\begin{itemize}
-    \item Multiply matrices row-by-row (parallel), handle result (sequential)
-    \item Do numerical simulation for \texttt{dt} (parallel), save intermediate result (sequential)
-    \item Handle batch of requests (parallel), decide next batch size (sequential)
-\end{itemize}
-
-% HW: implement via single monitor
-\end{frame}
-
-\begin{frame}[fragile]{CyclicBarrier}
-\framesubtitle{Example}
-
-They have example with matrix multiplication right in the javadoc\footnote{{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CyclicBarrier.html}}}!
-\end{frame}
-
-
-\subsection{Thundering herd problem}
-\showTOCSub
-
-
-\begin{frame}[fragile]{Thundering herd problem}
-
-\begin{minted}{java}
-static Deque<Object> data = ...
-static Lock lock = ...
-static CountDownLatch dataReady = new CountDownLatch(1);
-main(workItems) {
-    lock.lock(); 
-    try { data.addAll(workItems); } finally { lock.unlock(); }
-    dataReady.countDown();
-}
-worker_i() {
-    dataReady.await();
-    lock.lock(); 
-    try { Object element = data.poll(); } finally { lock.unlock(); }
-    process(element);
-}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}[fragile,noframenumbering]{Thundering herd problem}
-
-\begin{minted}{java}
-static Deque<Object> data = ...
-static CountDownLatch dataReady = new CountDownLatch(1);
-main(workItems) {
-    synchronized(data) { 
-        data.addAll(workItems); 
-    }
-    dataReady.countDown();
-}
-worker_i() {
-    dataReady.await();
-    synchronized(data) { 
-        Object element = data.poll(); 
-    }
-    process(element);
-}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}[fragile,noframenumbering]{Thundering herd problem}
-
-    Scenario:
-    \begin{itemize}
-        \item many threads wake-up because of broadcast 
-        \item only few (e.g. single one) make progress
-    \end{itemize}
-
-    \pause
-    Problem: inefficient utilization of scheduling quantums.
-
-    \pause
-    Really similar to lock convoy.
-
-    \pause
-
-    Solution:
-    \begin{itemize}
-        \item Use broadcasting with care
-        \item \texttt{monitor.notifyAll} and \texttt{condition.signalAll} avoid this by moving signalled thread from one queue to another, waking up single ''victim'' on \texttt{MonitorExit/unlock}\footnote<4->{This is called wait morphing}.
-    \end{itemize}
-
-    \pause
-    Warm reminder: built-in primitives are good and friendly\footnote<5->{High-level overview: ''Compact Java Monitors'' by Dice, Kogan {\url{https://arxiv.org/pdf/2102.04188}}}
-
-\end{frame}
-
-\questiontime{I am confused, could I observe thundering herd problem when using monitors or could not I?}
-
-\section{Group-level concurrency}
-\showTOC
-
-\begin{frame}{Group level concurrency}
-
-Mutex divides threads into ''owner'' and ''others''.
-
-Condition divides threads into ''signalled'' and ''others''.
-
-\texttt{CountDownLatch}/\texttt{CyclicBarrier} help to coordinate start/stop for group of threads.
-
-Could we do more?
-
-\begin{itemize}
-    \pause
-    \item No more than N threads in critical section \pause (semaphore)
-    \pause
-    \item One exclusive writer and N independent readers \pause (read-write lock)
-\end{itemize}
-
-\end{frame}
-
-
-\subsection{Semaphore}
-\showTOCSub
-
-\begin{frame}[fragile]{Semaphore}
-
-\url{https://en.wikipedia.org/wiki/Railway_semaphore_signal}
-
-\begin{center}
-\includegraphics[width=0.4\textwidth]{./pics/sema.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Semaphore}
-
-Semaphore\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Semaphore.html}}
-
-\begin{minted}{java}
-  Semaphore(int permits)
-  void acquire() // acquire permit, blocks until available
-  void release() // release permit
-\end{minted}
-
-Important notes:
-\begin{itemize}
-    \item Perfect to 
-    \begin{itemize}
-        \item limit number of active threads (parallelism control) 
-        \item bound shared resource usage (concurrent access control)
-    \end{itemize}    
-    \item No ownership -- any thread could \texttt{release} permits
-    \item \textit{Binary semaphore} (\texttt{permits == 1}) is very similar to \texttt{NonReentrantLock}
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}[fragile]{Semaphore}
-\framesubtitle{Example}
-
-\begin{minted}{java}
-static Semaphore sema = new Semaphore(N);
-static Set<Object> items = ...;
-useItem() {
-    sema.acquire();
-    try {
-        synchronized(items) {
-            Object item = selectRandom(items);
-            items.remove(item);
-        }
-        use(item);
-        synchronized(items) { items.add(item); }
-    } finally { sema.release(); }
-}
-\end{minted}
-\end{frame}
-
-\subsection{ReadWriteLock}
-\showTOCSub
-
-\begin{frame}[t,fragile]{ReadWriteLock}
-
-ReadWriteLock\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/ReadWriteLock.html}}
-
-\begin{minted}{java}
-  Lock readLock();
-  Lock writeLock();
-\end{minted}
-
-Read-mostly data structures:
-\begin{itemize}
-    \item Concurrent readers, Exclusive writer
-\end{itemize}
-
-Design decisions:
-\end{frame}
-
-\questiontime{What are the main design decisions for any mutual exclusion primitive?}
-
-\begin{frame}[t,fragile,noframenumbering]{ReadWriteLock}
-
-ReadWriteLock\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/ReadWriteLock.html}}
-
-\begin{minted}{java}
-  Lock readLock()
-  Lock writeLock()
-\end{minted}
-
-Read-mostly data structures:
-\begin{itemize}
-    \item Concurrent readers, Exclusive writer
-\end{itemize}
-
-Design decisions:
-\begin{itemize}
-    \item Reader preference vs. Writer preference
-%    TODO-q1: if N active readers why to stop N+1-th reader
-%    TODO-q2: if there are X waiting writers and Y waiting readers who should be preferred
-
-    \item Lock upgrade (promotion): readLock -> writeLock
-
-    \item Lock downgrade: writeLock -> readLock
-
-    \item Reentrancy for writers, reentrancy for readers
-\end{itemize}
-
-Advanced concurrency control: split threads into two types.
-\end{frame}
-
-
-\begin{frame}[fragile]{ReadWriteLock}
-\framesubtitle{Example}
-
-\begin{minted}{java}
-static Map<K, V> kv = ...
-static ReadWriteLock rw = ..
-V get(K k) {
-    rw.readLock().lock();
-    try {
-        return kv.get(k);
-    } finally { rw.readLock().unlock(); }
-}
-void put(K k, V v) {
-    rw.writeLock().lock();
-    try {
-        kv.put(k, v);
-    } finally { rw.writeLock().unlock(); }
-}
-\end{minted}
-\end{frame}
-
-
-\section{Thread pools}
-\showTOC
-
-\begin{frame}{Motivation}
+\begin{frame}{Thread pooling}
 
 \begin{itemize}
     \item \texttt{Thread} is valuable and scarce OS resource. 
@@ -693,44 +450,984 @@ void put(K k, V v) {
     \item \texttt{Thread}s may have purpose and context (name, priority, task-specific limits).
     \begin{itemize} \item  Should be properly reflected in observability API. \end{itemize}
 \end{itemize}
+\end{frame}
 
+\begin{frame}[t,fragile]{SingleThreadExecutor + LockedFuture}
+
+\textbf{Idea:}
+\begin{itemize}
+    \onslide<4->{\item Lock-per-Future for \texttt{get/set} synchronization}
+    \onslide<3->{\item Thread-safe FIFO container for submitted tasks}
+    \onslide<2->{\item Only one thread to execute all tasks}
+\end{itemize}
 \end{frame}
 
 
-\begin{frame}[fragile]{ThreadFactory}
+\begin{frame}[t,fragile,noframenumbering]{SingleThreadExecutor + LockedFuture}
 
-ThreadFactory\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ThreadFactory.html}}
+\begin{itemize}
+    \item Lock-per-Future for \texttt{get/set} synchronization
+\end{itemize}
+
+\pause
+\begin{minted}{java}
+class LockedFuture<V> implements Future<V> {
+  final Lock l = new ReentrantLock(); final Callable<V> task;
+  V result; boolean done = false;
+  public LockedFuture(Callable<V> task) { this.task = task; }
+  void setResult(V v) { 
+    l.lock(); try { result = v; done = true; } finally { l.unlock(); }}
+  V get() {
+    while (!isDone()) { /* await task completion */ }
+    l.lock(); try { return result; } finally { l.unlock(); }
+  }
+  boolean isDone() { l.lock(); try { return done; } finally { l.unlock(); }}
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{SingleThreadExecutor + LockedFuture}
+
+\begin{itemize}
+    \item Lock-per-Future for \texttt{get/set} synchronization
+    \item Thread-safe FIFO container    
+\end{itemize}
+
+\pause
+\begin{minted}{java}
+class LockedFIFO<T> implements Queue<T> {
+  private final Queue<T> q = new LinkedList<>();
+  private final Lock l = new ReentrantLock();
+  boolean offer(T e){ l.lock(); try { return q.offer(e); } finally { l.unlock(); }}
+  T poll()          { l.lock(); try { return q.poll();   } finally { l.unlock(); }}
+  boolean isEmpty() { l.lock(); try { return q.isEmpty();} finally { l.unlock(); }}
+  ...
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{SingleThreadExecutor + LockedFuture}
+
+\begin{itemize}
+    \item Lock-per-Future for \texttt{get/set} synchronization
+    \item Thread-safe FIFO container for submitted tasks    
+\end{itemize}
+
+\pause
+\begin{minted}{java}
+class SingleThreadExecutor implements ExecutorService {
+  private final ThreadFactory factory;
+  private final Queue<LockedFuture<?>> queue = new LockedFIFO<>();
+  public SingleThreadExecutor(ThreadFactory f) { factory = f; }
+  <T> Future<T> submit(Callable<T> task) {
+    var future = new LockedFuture<>(task);
+    queue.offer(future);
+    return future;
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{SingleThreadExecutor + LockedFuture}
+
+\begin{itemize}
+    \item Lock-per-Future for \texttt{get/set} synchronization
+    \item Thread-safe FIFO container for submitted tasks
+    \item Only one thread to execute all tasks    
+\end{itemize}
+
+\pause
+\begin{minted}{java}
+class SingleThreadExecutor implements ExecutorService {
+  private final ThreadFactory factory;
+  private final Queue<LockedFuture<?>> queue = new LockedFIFO<>();
+  private final Thread worker = factory.newThread(() -> {
+    while (true) {
+      while (queue.isEmpty()) { /* await new task */ }
+      var f = queue.poll();
+      f.setResult(f.task.call());
+    }});
+}
+\end{minted}
+\end{frame}
+
+\questiontime{
+\newline
+\texttt{LockedFuture.get: while (!isDone()) \{ /* await task completion */ \}}
+\newline
+\texttt{SingleThreadExecutor: while (queue.isEmpty()) \{ /* await new task */ \}}
+\newline
+\newline
+Could you spot \textbf{performance} problem here?
+}
+
+\section{Backoff policies}
+\showTOC
+
+\begin{frame}[fragile]{NoBackoff policy}
 
 \begin{minted}{java}
-  Thread newThread(Runnable r)
+while (true) {
+    if (isDone()) {
+        break;
+    }
+    // immediately try again
+}
 \end{minted}
 
-Key concept: abstracting \texttt{Thread} creation, deletion and maintenance.
-
-Smart words: decoupling \texttt{Thread} life cycle management from business logic.
-
+\begin{itemize}
+    \pause \item Pro: highest possible response time. Could be blazingly fast, especially when polling thread does not context switch
+    \pause \item Con: could waste CPU time
+    \pause \item Con: could cause starvation
+\end{itemize}
 \end{frame}
 
-\questiontime{\texttt{ThreadFactory} that returns ''previously used'' \texttt{Thread} instance: what are pros and cons?}
+\questiontime{What should thread do when task is not yet ready?}
 
-\begin{frame}[fragile]{Executor}
-
-Executor\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Executor.html}}
+\begin{frame}[fragile]{FixedBackOff policy}
 
 \begin{minted}{java}
-  void execute(Runnable command)
+while (true) {
+    if (isDone()) {
+        break;
+    }
+    Thread.sleep(CONSTANT);
+}
 \end{minted}
 
-Key concept: abstracting task execution.
+\begin{itemize}
+    \pause \item Pro: easy to implement
+    \pause \item Pro: predictable
+    \pause \item Pro: saves CPU resources
+    \pause \item Con: optimal \texttt{CONSTANT} could be task-specific, CPU-specific, workload-specific 
+    \begin{itemize}
+        \pause \item could cause starvation (too small delay)
+        \pause \item could cause latency problems (adds delay to observed pauses)
+        \pause \item could cause throughput degradation (too big delay)
+    \end{itemize}
+\end{itemize}      
+\end{frame}
 
-Smart words: decoupling business logic (\textbf{what} to do) from implementation (\textbf{how} and \textbf{where} to do) to simplify resource management (\textbf{who} will do).
+\begin{frame}[fragile]{ExponentialBackOff policy}
+
+\begin{minted}{java}
+long current_delay = START_DELAY;
+while (true) {
+    if (isDone()) {
+        break;
+    }
+    sleep(current_delay);
+    current_delay = min(current_delay * 2, MAX_DELAY);
+}
+\end{minted}
+
+\begin{itemize}
+    \pause \item Pro: saves CPU resources
+    \pause \item Pro: latency-friendly
+    \pause \item Con: still not perfect responsiveness    
+\end{itemize}
+
+\pause
+We need something better than polling (sleep-and-retry)!
+\end{frame}
+
+
+\section{Signalling}
+\showTOC
+
+\begin{frame}[t,fragile,noframenumbering]{Signalling}
+\framesubtitle{Motivation}
+
+Thread offloads tasks to other threads and waits for completion.
+
+Polling with backoff: ''time-to-react'' (latency) vs. ''unproductive time'' (throughput).
+
+\pause
+We need to
+\begin{itemize}
+ \item subscribe on completion event
+ \item notify subscribers (other threads) in efficient way
+\end{itemize}
+
+We need some support from OS!
+\end{frame}
+
+
+\begin{frame}{Signalling}
+\framesubtitle{Idea}
+
+Blocking API:
+\begin{itemize}
+    \item \texttt{wait} (a.k.a. \texttt{await}, \texttt{subscribe} ...)
+\end{itemize}
+
+\pause
+What are we waiting for?
+
+\begin{itemize}
+ \item Some task to be completed (execution flow control)
+ \item Some data to be available (data flow control)
+\end{itemize}
+
+\pause
+
+Non-blocking API:
+\begin{itemize}
+    \item \texttt{notify} (\texttt{notify\_one}, \texttt{signal} ...)
+    \item \texttt{notifyAll} (\texttt{signalAll}, \texttt{broadcast} ...)
+\end{itemize}
+
+\pause
+Who is going to be notified?
+
+\pause
+\begin{itemize}
+    \item Only threads interested in communication
+    \item The one/ones that are now suspended in \texttt{wait} method
+\end{itemize}
+
+\pause
+
+Must avoid race conditions and data races!
+\end{frame}
+
+\questiontime{concurrency primitive that you already know that helps to avoid data races?}
+
+\section{Condition variable}
+\subsection{API}
+\showTOCSub
+
+\begin{frame}[fragile]{Condition variable API}
+
+Creation\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/Lock.html#newCondition()}}:
+\begin{minted}{java}
+interface Lock {
+    Condition newCondition();
+}
+\end{minted}
+
+Operations\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/Condition.html}}:
+\begin{minted}{java}
+interface Condition {
+    void await();
+    void signal();
+    void signalAll();
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Condition variable}
+\framesubtitle{Usage rules}
+
+Illegal operations:
+\begin{itemize}
+    \item \texttt{await} out of critical section
+    \item \texttt{signal} out of critical section
+\end{itemize}
+
+Important details:
+\begin{itemize}
+    \item \texttt{await} unlocks mutex and starts listening for notification \textbf{atomically}
+    \item \texttt{await} wake-ups (consumes notification) and \textbf{starts} mutex acquisition
+    \item \texttt{signal/signalAll} wakes up waiting thread(s) only
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Condition variable}
+\framesubtitle{Overview}
+
+\begin{tikzpicture}[remember picture,overlay]
+\node[xshift=4cm,yshift=-6.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/CondScheme.png}};
+\end{tikzpicture}
+
+One of possible high-level designs\footnote{\tiny\url{https://en.wikipedia.org/wiki/Monitor_(synchronization)#/media/File:Monitor_(synchronization)-Mesa.png}}:
+\begin{itemize}
+    \pause \item Mutex: Owner
+    \begin{itemize}
+        \item The only thread inside critical section        
+    \end{itemize}
+    \pause \item Mutex: EnterSet
+    \begin{itemize}
+        \item Threads trying to enter critical section
+        \item Admission policy for lock acquisition
+    \end{itemize}
+    \pause \item Condition: WaitSet
+    \begin{itemize}
+        \item Threads waiting for signal and now out of critical section
+        \item Admission policy for notification
+    \end{itemize}    
+\end{itemize}
+
+\pause
+\textbf{Important}: notified threads need to re-enter mutex
+
+% TODO: DaveDice wait morphing pub
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Reminder: LockedFuture}
+
+\begin{minted}{java}
+class LockedFuture<V> implements Future<V> {
+  final Lock l = new ReentrantLock(); 
+  final Callable<V> task;
+  V result; 
+  boolean done = false;
+  public LockedFuture(Callable<V> task) { this.task = task; }
+  ...
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Reminder: LockedFuture}
+
+\begin{minted}{java}
+class LockedFuture<V> implements Future<V> { Lock l; V result; boolean done;  
+  void setResult(V v) { 
+    l.lock(); try { result = v; done = true; } finally { l.unlock(); }
+  }
+  V get() {
+    while (!isDone()) { /* await task completion */ } // <-----------------
+    l.lock(); try { return result; } finally { l.unlock(); }
+  }
+  boolean isDone() { l.lock(); try { return done; } finally { l.unlock(); }}
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{BetterFuture: using condition variables}
+
+\begin{minted}{java}
+class BetterFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { ??? }
+
+
+  
+  void setResult(V v) { ??? }
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{BetterFuture: using condition variables}
+
+\begin{minted}{java}
+class BetterFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              ???
+              ???
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              ???
+              ???
+            } finally { l.unlock(); }}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{BetterFuture: using condition variables}
+
+\begin{minted}{java}
+class BetterFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              c.await(); 
+              return result; 
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              result = v; done = true;
+              c.signal();
+            } finally { l.unlock(); }}}
+\end{minted}
+
+\pause
+\textbf{Reminder}: \texttt{signal} wakes up one of waiting threads
+
+\pause
+Signal from \texttt{setResult} could be lost, \texttt{get} would block forever
+\end{frame}
+
+\subsection{Lost signal}
+\showTOCSub
+
+\begin{frame}[t, fragile]{Problem №1: lost signal due to race condition}
+
+Short description: \texttt{WaitSet} is empty due to race condition
+
+\begin{minted}{java}
+threadA() {
+    lock.lock();
+    try {
+        ready = true; condition.signal();
+    } finally { lock.unlock(); }
+}
+threadB() {
+    lock.lock();
+    try {
+        condition.await()
+        if (ready) doComputation();
+    } finally { lock.unlock(); }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t, fragile, noframenumbering]{Problem №1: lost signal due to race condition}
+
+Short description: \texttt{WaitSet} is empty due to race condition
+
+Solution: never expect that your \texttt{signal} will reach already waiting receiver. 
+
+Sender thread:
+\begin{itemize}
+    \item mark ready
+    \item then \texttt{signal}
+\end{itemize}
+
+Receiver thread:
+\begin{itemize}
+    \item check ready
+    \item \texttt{await} if not yet ready
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Reminder: BetterFuture}
+\framesubtitle{... that lose signals here and there}
+
+\begin{minted}{java}
+class BetterFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              c.await(); 
+              return result; 
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              result = v; done = true;
+              c.signal();
+            } finally { l.unlock(); }}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile]{EvenBetterFuture: using condition variables}
+\framesubtitle{... without lost signal due to race condition}
+
+\begin{minted}{java}
+class EvenBetterFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              if (!done) { c.await(); } // guard against too fast `setResult`
+              return result; 
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              result = v; done = true;
+              c.signal();
+            } finally { l.unlock(); }}}
+\end{minted}
+
+\pause Seems OK now... \pause What if there are 2 threads invoking \texttt{get}?
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Problem №2: lost signal due to logic error}
+
+Short description: \texttt{signal} delivered message to wrong waiter
+
+\pause
+
+Solutions:
+\begin{itemize}
+    \pause \item \texttt{signalAll} is always safer, yet could be less performant. \textbf{Not always correct}.
+    \pause \item better divide responsibility across threads (one-to-one communication via personal \texttt{Condition}s? other sync primitives?)
+\end{itemize}
+\end{frame}
+
+\begin{frame}[t,fragile]{Homework: lost signal}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/3.2/readme.markdown}}
+\begin{homeworkmail}{Task 3.2}
+    Find at least two bugs in sketch implementation of ''two producer, single consumer'' concurrent system that uses \texttt{java.util.concurrent.Condition}.
+\end{homeworkmail}
+\end{frame}
+
+% \begin{frame}[t,fragile]{Problem №2: lost signal due to logic error}
+% Short description: \texttt{signal} delivered message to wrong waiter, \texttt{signalAll} needed
+% 
+% \begin{minted}[fontsize=\footnotesize]{java}
+% producer1() { lock.lock(); try { while (true) {
+%     if (data != null) condition.await();
+%     data = new Data1(); condition.signal();
+% }} finally { lock.unlock(); } 
+% }
+% producer2() { lock.lock(); try { while (true) {
+%     if (data != null) condition.await();
+%     data = new Data2(); condition.signal();
+% }} finally { lock.unlock(); }
+% }
+% consumer() { lock.lock(); try { while (true) {
+%     if (data != null) { process(data); data = null; condition.signal(); }
+%     condition.await();
+% }} finally { lock.unlock(); }
+% }
+% \end{minted}
+% \end{frame}
+
+%\begin{frame}[t,fragile,noframenumbering]{Problem №2: lost signal due to logic error}
+%
+%Short description: \texttt{signal} delivered message to wrong waiter, \texttt{signalAll} needed
+%
+%\begin{minted}{java}
+%producer1() { loop-under-lock {
+%    if (data != null) condition.await();
+%    data = new Data1(); condition.signal();
+%}}
+%producer2() { loop-under-lock {
+%    if (data != null) condition.await();
+%    data = new Data2(); condition.signal();
+%}}
+%consumer() { loop-under-lock {
+%    if (data != null) { process(data); data = null; condition.signal(); }
+%    condition.await();
+%}}
+%\end{minted}
+%\end{frame}
+
+
+\begin{frame}[fragile]{TheBestFuture: using condition variables}
+\framesubtitle{... without lost signal due to logic error}
+
+\begin{minted}{java}
+class TheBestFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              if (!done) { c.await(); }
+              return result; 
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              result = v; done = true;
+              c.signalAll(); // notify all `get`-ers
+            } finally { l.unlock(); }}}
+\end{minted}
+
+\pause Seems OK now... \pause But I have an itch to re-read documentation for some reason
+\end{frame}
+
+\subsection{Spurious wakeup}
+\showTOCSub
+
+\begin{frame}[fragile]{Problem №3: spurious wakeup}
+
+Short description: thread wake-ups from \texttt{condition.await} for no reason\footnote{\url{https://pubs.opengroup.org/onlinepubs/009604599/functions/pthread_cond_signal.html}}\textsuperscript{,}\footnote{\url{https://devblogs.microsoft.com/oldnewthing/20180201-00/?p=97946}}
+
+\begin{minted}{java}
+main() {
+    lock.lock();
+    try {
+        condition.await();
+        System.out.println("Should not reach here");
+    } finally { lock.unlock(); }    
+}
+\end{minted}
+
+\pause
+
+Solution:
+\begin{itemize} 
+    \item always wrap \texttt{await} into \texttt{while} loop with predicate re-check
+    \item always expect that \texttt{await} is implemented as \texttt{unlock(); sleep(1); lock();}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[t,fragile]{CondVarFuture}
+
+\begin{minted}{java}
+class CondVarFuture<V> implements Future<V> { Lock l; V result; boolean done;
+  final Condition c = l.newCondition();
+  V get() { l.lock(); try {
+              while (!done) { c.await(); } // guard against spurious wakeups
+              return result; 
+            } finally { l.unlock(); }}
+  void setResult(V v) { 
+            l.lock(); try { 
+              result = v; done = true;
+              c.signalAll();
+            } finally { l.unlock(); }}}
+\end{minted}
+
+\pause Seems OK now... \pause Does not properly support exceptions, by the way
+\end{frame}
+
+\begin{frame}[fragile]{CondVarFuture}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/3.3/readme.markdown}}
+\begin{homeworkmail}{Task 3.3}
+    \begin{itemize}
+        \item Implement \texttt{SingleTheadExecutorService} that properly supports severe \texttt{Throwable}s by starting new worker thread
+        \item Implement \texttt{CondVarFuture} that properly supports exceptions using \texttt{java.util.concurrent.Condition}
+    \end{itemize}
+\end{homeworkmail}
+\end{frame}
+
+\subsection{Fairness}
+\showTOCSub
+
+\begin{frame}{Reminder: condition variable overview}
+
+\begin{tikzpicture}[remember picture,overlay]
+\node[xshift=4cm,yshift=-6.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/CondScheme.png}};
+\end{tikzpicture}
+
+One of possible high-level designs:
+\begin{itemize}
+    \item Mutex: Owner
+    \begin{itemize}
+        \item The only thread inside critical section        
+    \end{itemize}
+    \item Mutex: EnterSet
+    \begin{itemize}
+        \item Threads trying to enter critical section
+        \item \textbf{Admission policy for lock acquisition}
+    \end{itemize}
+    \item Condition: WaitSet
+    \begin{itemize}
+        \item Threads waiting for signal and now out of critical section
+        \item \textbf{Admission policy for notification}
+    \end{itemize}    
+\end{itemize}
+\end{frame}
+
+\questiontime{what is the connection between starvation and admission policy?}
+\questiontime{what is the connection between fairness and throughput?}
+
+\begin{frame}[t,fragile]{Fairness and Starvation for Condition Variables}
+
+Short description: fair mutex + unfair \texttt{WaitSet} => unfair system
+
+\begin{minted}{java}
+threadA()  { l.lock(); try { while(true) { 
+                               System.out.println("A");
+                               condition.signal(); condition.await();
+}} finally { l.unlock(); }}
+threadB()  { l.lock(); try { while(true) {
+                               System.out.println("B");
+                               condition.signal(); condition.await();
+}} finally { l.unlock(); }}
+threadC()  { l.lock(); try { while(true) {
+                               System.out.println("C");
+                               condition.signal(); condition.await();
+}} finally { l.unlock(); }}
+\end{minted}
+
+\pause
+\texttt{A, B, A, B, A, B ...}
+\end{frame}
+
+\begin{frame}[t,fragile]{Unbounded concurrent queue}
+
+\begin{itemize}
+    \item Thread-safe FIFO container    
+\end{itemize}
+
+\begin{minted}{java}
+class LockedFIFO<T> implements Queue<T> {
+    private final Queue<T> q = new LinkedList<>();
+    private final Lock l = new ReentrantLock();
+    boolean offer(T e) { l.lock(); try { return q.offer(e); } finally { l.unlock(); }}
+    T poll()           { l.lock(); try { return q.poll();   } finally { l.unlock(); }}
+    boolean isEmpty()  { l.lock(); try { return q.isEmpty();} finally { l.unlock(); }}
+}
+\end{minted}
+\end{frame}
+
+\questiontime{could you estimate the size of \texttt{LockedFIFO}?}
+
+\begin{frame}[t,fragile]{Bounded concurrent queue}
+
+\begin{itemize}
+    \item FIFO container with fixed size
+\end{itemize}
 
 \end{frame}
 
-\questiontime{\texttt{Executor} does not return \texttt{Future}. Describe valid \texttt{Executor} implementation that indeed does not require \texttt{Future}s. }
+\questiontime{what submitting thread should do when queue is full?}
+\questiontime{what executor thread should do when queue is empty?}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue}
+
+\begin{itemize}
+    \item FIFO container with fixed size and blocking methods
+\end{itemize}
+
+\pause
+\texttt{BlockingQueue<E>}\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/BlockingQueue.html}}
+\begin{minted}{java}
+interface BlockingQueue<E> {
+    void put(E e);
+    E take();
+}
+\end{minted}
+\pause
+
+Mmmm... \texttt{add}, \texttt{offer}, \texttt{put}, \texttt{remove}, \texttt{poll} ...
+
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue}
+
+\begin{itemize}
+    \item FIFO container with fixed size and blocking methods
+\end{itemize}
+
+\begin{minted}{java}
+interface BlockingQueue<E> {
+    void put(E e);
+    E take();
+}
+\end{minted}
+\pause
+
+\begin{center} Refresher on Java stdlib collections\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/BlockingQueue.html}} \end{center}
+\newline
+
+\begin{tabular}{l|llll}
+         &    Throws exception  &  Special value &  Blocks  & Times out            \\
+\hline
+Insert   &    add(e)            &  offer(e)      &  put(e)  & offer(e, time, unit) \\
+Remove   &    remove()          &  poll()        &  take()  & poll(time, unit)     \\
+Examine  &    element()         &  peek()        &  N/A     & N/A                  \\
+\end{tabular}
+
+\end{frame}
+
+\begin{frame}[t,fragile]{Bounded concurrent queue with single condition}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> {
+  Lock l = new ReentrantLock(); 
+  Condition c = lock.newCondition();
+  Queue<E> q = new LinkedList<>();
+  ...
+\end{minted}
+
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with single condition}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Condition c; Queue<E> q;
+  ...
+\end{minted}
+
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with single condition}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Condition c; Queue<E> q;
+  void put(E x) { l.lock(); try {
+      ???
+      ???
+    } finally { l.unlock(); }}
+  E take() { lock.lock(); try {
+      ???
+      ???
+      ???
+    } finally { l.unlock(); }}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with single condition}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Condition c; Queue<E> q;
+  void put(E x) { l.lock(); try {
+      while (q.size() == MAX_CAPACITY) { c.await(); }
+      q.add(x); c.signal();
+    } finally { l.unlock(); }}
+  E take() { lock.lock(); try {
+      ???
+      ???
+      ???
+    } finally { l.unlock(); }}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with single condition}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Condition c; Queue<E> q;
+  void put(E x) { l.lock(); try {
+      while (q.size() == MAX_CAPACITY) { c.await(); }
+      q.add(x); c.signal();
+    } finally { l.unlock(); }}
+  E take() { lock.lock(); try {
+      while (q.isEmpty()) { c.await(); }
+      c.signal();
+      return q.remove();
+    } finally { l.unlock(); }}}
+\end{minted}
+\pause
+\textbf{Reminder}: \texttt{signal} wakes up one of waiting threads
+\pause
+\newline
+Assume: \texttt{MAX\_CAPACITY = 2}, \texttt{q.size() == 2}, 3 blocked \texttt{put}s
+\pause
+\newline
+Scenario: 3 \texttt{take}s, last still hangs
+\end{frame}
+
+\begin{frame}[t,fragile]{Homework: analysis of bounded concurrent queue with single condition}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/3.4/readme.markdown}}
+\begin{homeworkmail}{Task 3.4}
+    Prove that for any \texttt{MAX\_CAPACITY > 2} there exists concurrent execution scenario where
+    \texttt{take} operation indefinitely blocks despite the fact that queue contains some elements.
+\end{homeworkmail}
+
+\end{frame}
 
 
-\begin{frame}[fragile]{ExecutorService}
+\subsection{Multiple condition variables per lock}
+\showTOCSub
+
+\begin{frame}[t,fragile]{Bounded concurrent queue with two conditions}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Queue<E> q;
+  Condition notFull  = l.newCondition(); 
+  Condition notEmpty = l.newCondition(); 
+  void put(E x) { 
+      ???
+      ???
+      ???}
+  E take() {
+      ???
+      ???
+      ???
+      ???}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with two conditions}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Queue<E> q;
+  Condition notFull  = l.newCondition(); 
+  Condition notEmpty = l.newCondition(); 
+  void put(E x) { l.lock(); try {
+      ???
+      ???
+    } finally { l.unlock(); }}
+  E take() { lock.lock(); try {
+      ???
+      ???
+      ???
+    } finally { l.unlock(); }}}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Bounded concurrent queue with two conditions}
+
+\begin{minted}{java}
+class BoundedBuffer<E> implements BlockingQueue<E> { Lock l; Queue<E> q;
+  Condition notFull  = l.newCondition(); 
+  Condition notEmpty = l.newCondition(); 
+  void put(E x) { l.lock(); try {
+      while (q.size() == MAX_CAPACITY) { notFull.await(); }
+      q.add(x); notEmpty.signal();
+    } finally { l.unlock(); }}
+  E take() { lock.lock(); try {
+      while (q.isEmpty()) { notEmpty.await(); }
+      notFull.signal();
+      return q.remove();
+    } finally { l.unlock(); }}}
+\end{minted}
+
+\pause Seems OK ... \pause Official javadoc: {\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/locks/Condition.html}}
+
+\end{frame}
+
+\begin{frame}[t,fragile]{Concurrent queues}
+
+\begin{itemize}
+    \item Bounded array-based buffer {\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ArrayBlockingQueue.html}}
+
+    \item Optionally limited-length linked list {\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/LinkedBlockingQueue.html}}
+
+    \item Elements with priorities \newline {\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/PriorityBlockingQueue.html}}
+\end{itemize}
+\end{frame}
+
+\subsection{Predicate invalidation}
+\showTOCSub
+
+\begin{frame}[t,fragile]{Predicate invalidation}
+
+Short description: thread \texttt{await}s for predicate and \textbf{does not recheck} it upon wakeup
+
+\begin{minted}{java}
+threadA() { lock.lock(); try {
+        while (true) {
+            if (data == null) condition.await();
+            System.out.println(data.hashCode())            
+        }
+    } finally { lock.unlock(); } 
+}
+threadB() { while (true) {
+        lock.lock(); try {
+            if (random.nextBoolean()) { data = null; } 
+            else { data = new Data(); condition.signal(); }
+        } finally { lock.unlock(); }
+    }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Predicate invalidation}
+
+Short description: thread \texttt{await}s for predicate and \textbf{does not recheck} it upon wakeup
+
+Solution: \textbf{always} re-check \texttt{await} predicate. If it is invalidated, wait again. 
+
+\textbf{Ensure} you are not suffering from missing signal bug.
+\end{frame}
+
+\begin{frame}{Condition variable}
+\framesubtitle{Conclusion}
+
+\begin{itemize}
+    \item Cross-thread message passing/coordination \textbf{could} be implemented via mutex + polling    
+    \item Signalling saves computation resources for something more useful than busy looping
+\end{itemize}
+
+Mutex + ConditionalVariable allow to build custom synchronization protocols. Be aware of
+\begin{itemize}
+    \item Lost signal problem    
+    \item Spurious wakeup
+    \item Fairness considerations
+    \item Predicate invalidation
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Homework}
+
+{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/3.5/readme.markdown}}
+\begin{homeworkmail}{Task 3.5}
+    Open \url{https://deadlockempire.github.io}, pass ''Condition Variables'' level.
+\end{homeworkmail}
+\end{frame}
+
+\questiontime{why are we trying to implement every single bit of \texttt{java.util.concurrent}: \texttt{Future}, \texttt{ExcutorService}, \texttt{BlockingQueue}?}
+
+\section{Thread pools}
+\showTOC
+
+\begin{frame}[fragile]{ExecutorService: real world API}
 
 ExecutorService\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ExecutorService.html}}
 
@@ -752,7 +1449,7 @@ Structured concurrency:
 
 \end{frame}
 
-\questiontime{What if somebody \texttt{submit} task with unhandled exception to \texttt{ExecutorService}? What about other ways to ''destroy'' thread?}
+%\questiontime{What if somebody \texttt{submit} task with unhandled exception to \texttt{ExecutorService}? What about other ways to ''destroy'' thread?}
 
 \begin{frame}[fragile]{ScheduledExecutorService}
 
@@ -770,16 +1467,17 @@ ScheduledFuture<?>  scheduleAtFixedRate(Runnable command, long initialDelay,
 
 Delay and periodic schedule control.
 
-Hint: could be useful for testing, stress measurements and simulating ''workload bursts''.
+\textbf{Hint}: could be useful for testing, stress measurements and simulating ''workload bursts''.
 \end{frame}
 
 
 \begin{frame}[fragile]{ThreadPools API: summary}
 
 \begin{itemize}
-    \item \texttt{ThreadFactory} -- create threads
-    \item \texttt{Executor} -- execute tasks
-    \item \texttt{ExecutorService}/\texttt{ScheduledExecutorService} -- control task execution (order and resources)
+    \item \texttt{Runnable}, \texttt{Callable<T>} -- unit of work (e.g. tasks)
+    \item \texttt{ThreadFactory} -- environment requirements (e.g. threads)
+    \item \texttt{Executor} -- submission point (e.g. thread-safe container)
+    \item \texttt{ExecutorService} -- task execution policy (life cycle, resource limits, frequency)
 \end{itemize}
 
 \pause
@@ -795,11 +1493,68 @@ Hint: could be useful for testing, stress measurements and simulating ''workload
 \begin{itemize}
     \item under-the-hood synchronization ''just works'', nothing to implement
 \end{itemize}
+\end{frame}
+
+\questiontime{no deadlock when all submitted tasks have no \texttt{Lock}s and \texttt{Condition}s inside?}
+
+\begin{frame}[t,fragile]{ThreadPools API pitfalls: thread-starvation deadlock}
+
+\begin{minted}{java}
+var service = new SingleThreadExecutorService();
+var outerFuture = service.submit(() -> {
+    var innerFuture1 = service.submit(() -> {
+        return compute(1);
+    });
+    var innerFuture2 = service.submit(() -> {
+        return compute(2);
+    });
+    return innerFuture1.get() + innerFuture2.get();
+});
+\end{minted}
+
+\pause
+Single working thread waits for future to be computed by himself.
+\end{frame}
+
+\begin{frame}[t,fragile]{ThreadPools API pitfalls: resource deadlock}
+
+\begin{minted}{java}
+var service = new FixedThreadPool(2);
+var result = service.submit(() -> {
+               return service.submit(() -> {
+                 return service.submit(() -> {
+                    return compute(1);
+                 }).get();
+               }).get();;
+             }).get();
+\end{minted}
+
+\newline
+\pause \texttt{Future.get} that does not block but helps with pending tasks? 
+\newline
+\pause \texttt{CompletableFuture}, \texttt{ForkJoinTask} ... \pause Not today.
 
 \end{frame}
 
+\questiontime{is it always a good idea to use \texttt{ExecutorService} that creates threads on demand?}
 
-\begin{frame}[fragile]{ThreadPools API: implementations}
+\begin{frame}[t,fragile]{ThreadPools API pitfalls: denial of service}
+
+\begin{minted}{java}
+var service = new ThreadPerTaskExecutorService();
+for (Data request: userRequests) {
+    service.submit(() -> {
+        return process(request);
+    });
+}
+\end{minted}
+
+\pause
+Too many requests could cause \texttt{OutOfMemory: too much threads}.
+
+\end{frame}
+
+\begin{frame}[fragile]{ThreadPools API: available implementations}
 
 Executors\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Executors.html}}
 
@@ -818,10 +1573,31 @@ Remember:
     \item Caching can cause memory leaks or unintentionally reuse resources (e.g. native-lib-specific resources)
 \end{itemize}
 
-Full overview and arbitrary customization available\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ThreadPoolExecutor.html}}
+Full overview and arbitrary customization available\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ThreadPoolExecutor.html}}
 
 \end{frame}
 
+% \begin{frame}[fragile]{ThreadPools API: homework}
+% 
+% TODO task 3.6.1
+% implement newFixedThreadPool
+% reminder: Exception from Callable -- possible Future result
+%           any other Throwable -- thread should die (abnormal situation), future still returns exception
+%           died threads should be restored by executor mechanics (factory)
+% 
+% TODO task 3.6.2
+% implement newCachedThreadPool
+% reminder: unused threads should be killed (e.g. after 10 seconds)
+% 
+% TODO task 3.6.3
+% implement selfHelpingThreadPool
+% N workers
+% when thread invokes blocking Future.get and it is not still ready -- this thread executes task
+% 
+% caveats: extra grabbed locks in helper
+%          properly delete task from queue
+% 
+% \end{frame}
 
 \begin{frame}[fragile]{ThreadPools API: now you know it}
 
@@ -833,260 +1609,68 @@ From now on, you \textbf{must} avoid using \texttt{new Thread()} in your solutio
     \item Encapsulate thread configuration in \texttt{ThreadFactory}
 \end{itemize}
 
-\pause
-
-\begin{homeworkcode}{Task~\taskRewritePhilosophers}
-Rewrite \texttt{DiningTable.java}\footnote{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/lec2/dining-philosophers/dining-philosophers/src/main/java/org/nsu/syspro/parprog/base/DiningTable.java}} using \texttt{Executor}s to simplify life cycle management (\texttt{boolean started}, \texttt{boolean shouldStop}).
-\end{homeworkcode}
-
-This task is \textbf{independent} from dining philosophers problem, you should refactor existing concurrent code, not invent new one.
-
 \end{frame}
-
-
-\section{Workload generation}
-\showTOC
-
-\begin{frame}{Producer-consumer}
-
-\begin{itemize}
-    \item N threads generate work items
-    \item M threads process work items
-\end{itemize}
-
-\begin{center}
-\includegraphics[width=0.7\textwidth]{./pics/prod-cons.png}
-\end{center}
-
-BlockingQueue\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/BlockingQueue.html}}
-
-\end{frame}
-
-\questiontime{How to ensure that producers and consumers are ''balanced''?}
-
-
-\begin{frame}{Producer-consumer}
-
-\begin{itemize}
-    \item X worker threads
-\end{itemize}
-
-Depending on heuristic, every thread either
-\begin{itemize}
-    \item generate work item
-    \item process existing work item
-\end{itemize}
-
-\pause
-
-Common problems:
-\begin{itemize}
-    \item Fixed-size buffer deadlock: 
-    \begin{itemize} 
-        \item buffer capacity is X
-        \item every thread produces no more than 2 elements per iteration
-    \end{itemize}
-
-    \item Empty-buffer deadlock: 
-    \begin{itemize} 
-        \item buffer is empty
-        \item every thread heuristically decided to be consumer
-    \end{itemize}
-\end{itemize}
-
-\end{frame}
-
-\questiontime{How to ensure that producers and consumers reach ''consistent progress''?}
-
-\begin{frame}[t,fragile]{Fork-join}
-
-Fork-join model\footnote{\url{https://en.wikipedia.org/wiki/Fork-join_model}}
-
-\begin{center}
-\includegraphics[width=0.65\textwidth]{./pics/fork-join.png}
-\end{center}
-
-\end{frame}
-
-\questiontime{How to decide when to stop \texttt{fork}?}
-
-
-\begin{frame}{Reactive Streams}
-
-\url{https://openjdk.org/jeps/266}
-
-\begin{quote}
-The main goal of Reactive Streams is to govern the exchange of stream data across an asynchronous boundary—think passing elements on to another thread or thread-pool
-— while ensuring that the receiving side is not forced to buffer arbitrary amounts of data. In other words, back pressure is an integral part of this model in order to 
-allow the queues which mediate between threads to be bounded. 
-\end{quote}
-
-\texttt{Flow.Publisher<T>}, \texttt{Flow.Subscriber<T>}\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/Flow.html}}
-\end{frame}
-
-
-\begin{frame}{Workload generation: takeaways}
-
-\begin{itemize}
-    \item Producer-consumer: ''push'' based concurrent system
-    \item Fork-join: divide-and-conquer, ''helping hand'' approach
-    \item Reactive: ''propagate backpressure'' design 
-\end{itemize}
-
-More features -- harder to implement, monitor and control.
-
-\end{frame}
-
-
-\section{Load balancing}
-\showTOC
-
-
-\begin{frame}{Load balancing}
-
-ThreadPool-based design uses classic timesharing approach: 
-\begin{itemize}
-    \item there are \texttt{X} tasks (functions) 
-    \item \texttt{Y} ''virtual'' executors (threads) which are mapped to
-    \item \texttt{Z} ''real'' executors (cores)
-\end{itemize}
-\pause
-There are well-known corner cases:
-\begin{itemize}
-    \item \texttt{X < Y}: insufficient concurrency (coarse-grained problem)
-    \item \texttt{X >> Y}: excessive coordination overheads (too fine-grained approach or too aggressive sub-task creation)
-    \item \texttt{Y < Z}: undersubscription (underutilization)
-    \item \texttt{Y >> Z}: oversubscription
-\end{itemize}
-\pause
-In any scenario, \texttt{Y} threads have to coordinate task execution:
-\begin{itemize}
-    \item Eventual progress: every task will be executed
-    \item Correctness: every task is executed exactly once
-    \item Performance: keep coordination overheads minimal  
-\end{itemize}
-
-% TODO: arcticle with perf-oriented designs for over/under scubscription
-
-\end{frame}
-
-
-\begin{frame}{Load balancing: global queue}
-\framesubtitle{Work arbitrage}
-
-Load balancing design:
-\begin{itemize}
-    \item Single shared thread-safe task queue
-    \item Every available \texttt{Worker} gets tasks one-by-one
-\end{itemize}
-
-Counter-examples:
-\begin{itemize}
-    \item Many short tasks
-    \item \texttt{Worker}s of varying speeds (energy-efficient and usual cores)
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}{Load balancing: global queue + batching}
-\framesubtitle{Work arbitrage}
-
-Load balancing design:
-\begin{itemize}
-    \item Single shared thread-safe task queue
-    \item Every available \texttt{Worker} gets tasks in batches (N per request)
-\end{itemize}
-
-Counter-examples:
-\begin{itemize}
-    \item Mix of short and long tasks
-    \item \texttt{Worker}s of varying speeds (energy-efficient and usual cores)
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Load balancing: global queue + batching}
-\framesubtitle{Work dealing}
-
-Load balancing design:
-\begin{itemize}
-    \item Single shared thread-safe task queue
-    \item Every available \texttt{Worker} gets tasks in batches (N per request)
-    \item Overloaded \texttt{Worker} moves fraction of tasks to global queue
-\end{itemize}
-
-Counter-examples:
-\begin{itemize}
-    \item Few long tasks
-    \item Overloaded thread spends CPU for auxiliary coordination
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Load balancing: work-stealing}
-
-Load balancing design:
-\begin{itemize}
-    \item Several shared thread-safe task queues (e.g. 1 per \texttt{Worker})
-    \item \texttt{Worker} get tasks in batches (N per request) from some queue (''steals'' from neighbour)
-
-\end{itemize}
-
-Not that easy to implement and fine-tune\footnote{\tiny\url{https://shipilev.net/#forkjoin}}. Nontrivial termination protocol.
-
-ForkJoinPool\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ForkJoinPool.html}}
-
-\end{frame}
-
 
 \section{Summary}
 
 \begin{frame}{Summary}
-
-Mutual exclusion and signalling combined into single universal primitive: monitor
-
-Java language has special support for built-in monitors: \texttt{synchronized} keyword 
-
-Bulk thread notification:
 \begin{itemize}
-    \item \texttt{CountDownLatch}, \texttt{CyclicBarrier}
-    \item Thundering herd problem
-\end{itemize}
-
-Tools for fine-grained group-level thread control:
-\begin{itemize}
-    \item \texttt{Semaphore}, \texttt{ReadWritelock}
-\end{itemize}
-
-Universal API for thread/task management:
-\begin{itemize}
-    \item \texttt{ThreadFactory}, \texttt{Executor}, \texttt{ExecutorService}
-\end{itemize}
-
-Different ways to generate workload concurrently:
-\begin{itemize}
-    \item Producer-consumer, Fork-join, Reactive Streams
-\end{itemize}
-
-Designs for efficient concurrent load balancing:
-\begin{itemize}
-    \item Work arbitrage, Work dealing, Work stealing
+    \item Decoupling tasks -- \texttt{Runnable}, \texttt{Callable}
+        \begin{itemize}
+            \item from particular threads  -- \texttt{ThreadFactory}
+            \item from submission protocol -- \texttt{Executor}
+            \item from scheduling policy   -- \texttt{ExecutorService}
+        \end{itemize}
+    \item Backoff policies for polling -- better CPU utilization by sacrificing latency
+        \begin{itemize}
+            \item NoBackoff, FixedBackoff, ExponentialBackoff
+        \end{itemize}
+    \item Condition variable allows to replace polling with OS-level signalling
+        \begin{itemize}
+            \item lost signal, spurious wakeups, fairness, predicate invalidation
+        \end{itemize}
+    \item Every thread pool type has
+        \begin{itemize}
+            \item advantages: life cycle management, delayed execution, on-demand thread creation
+            \item weaknesses: thread-starvation deadlock, resource deadlock, denial of service
+        \end{itemize}
 \end{itemize}
 \end{frame}
-
 
 \begin{frame}{Summary: homework}
 
-\begin{homeworkmail}{}{
-    Implement every concurrent primitive presented in this course using built-in Java monitor(s). This task is \textbf{not} graded, but your questions are welcome!
-}
-\end{homeworkmail}
-
-\begin{homeworkcode}{Task~\taskRewritePhilosophers}
-Rewrite \texttt{DiningTable.java}\footnote{\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1/lec2/dining-philosophers/dining-philosophers/src/main/java/org/nsu/syspro/parprog/base/DiningTable.java}} using \texttt{Executor}s to simplify life cycle management (\texttt{boolean started}, \texttt{boolean shouldStop}).
-\end{homeworkcode}
+\texttt{Lecture 3, Tasks 3.*:} {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1}}
 
 \end{frame}
 
+% TODO: CompletionService (auto order finished futures, Future.done)
+
+
+%Big homework (4w)
+    %bounded thread pool, blocking awaits are self-helping,
+%- design
+%- tests
+%- deadlock conditions
+%- example of deadlock with resource-constrained cause
+
+
+% \begin{frame}{Producer consumer}
+% Unbounded queue with mutex
+% \end{frame}
+% 
+% \begin{frame}{Publisher-subsrciber}
+% Pull/push approaches, reactive systems
+% \end{frame}
+% 
+% \begin{frame}{Backoff policies}
+% Livelock
+% \end{frame}
+% 
+% \begin{frame}{Problems}
+% 
+% message passing + backpressure 
+% self impl thread-safe counter
+% self impl striped lock (hashmap?)
+% \end{frame}
 
 \end{document}
