@@ -30,6 +30,6 @@ Your solution to this task should contain at least two parts:
 - Answers to the questions in `pdf` file. Feel free to use any typesetting system (.tex + pdflatex, .markdown + pandoc, LibreOfficeWriter + Export as pdf ...).
 
 Please note:
-- Latency discussion should be supported with numbers (e.g. you should plot max delay on y-axis with varying number of CPUs on x-axis).
+- Latency discussion should be supported with numbers (e.g. you should plot max delay on y-axis with varying number of threads on x-axis).
 - Do not forget to add error bars to your plots.
 - Consider using some automation for graph drawing process. We tend to frequently ask students to tweak few lines of code and redraw the performance figures.
