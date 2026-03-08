@@ -1,0 +1,34 @@
+"Thread-0" #13 prio=5 os_prio=0 cpu=0,18ms elapsed=5,31s tid=0x00007dfb4045f800 nid=0x2276 in Object.wait()  [0x00007dfb117fe000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait(java.base@11.0.30/Native Method)
+	- waiting on <0x0000000718ae1908> (a java.lang.Thread)                          // A waits B. Deadlock!
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1300)
+	- waiting to re-lock in wait() <0x0000000718ae1908> (a java.lang.Thread)
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1375)
+	at TwoThreaded.lambda$main$2(TwoThreaded.java:14)                               // A calls B.join() in lambda
+	at TwoThreaded$$Lambda$16/0x0000000800066040.run(Unknown Source)
+	at TwoThreaded.lambda$main$0(TwoThreaded.java:4)                                // A calls lambda.run()
+	at TwoThreaded$$Lambda$14/0x0000000800066840.run(Unknown Source)
+	at java.lang.Thread.run(java.base@11.0.30/Thread.java:829)
+
+
+"Thread-1" #14 prio=5 os_prio=0 cpu=0,11ms elapsed=5,31s tid=0x00007dfb40461800 nid=0x2277 in Object.wait()  [0x00007dfb116fe000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait(java.base@11.0.30/Native Method)
+	- waiting on <0x0000000718adf1c8> (a java.lang.Thread)                          // B waits A
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1300)
+	- waiting to re-lock in wait() <0x0000000718adf1c8> (a java.lang.Thread)
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1375)
+	at TwoThreaded.lambda$main$1(TwoThreaded.java:7)                                // B calls A.join()
+	at TwoThreaded$$Lambda$15/0x0000000800066c40.run(Unknown Source)
+	at java.lang.Thread.run(java.base@11.0.30/Thread.java:829)
+
+
+"main" #1 prio=5 os_prio=0 cpu=127,48ms elapsed=5,44s tid=0x00007dfb40028000 nid=0x225c in Object.wait()  [0x00007dfb463fe000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait(java.base@11.0.30/Native Method)
+	- waiting on <0x0000000718adf1c8> (a java.lang.Thread)                          // main waits A
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1300)
+	- waiting to re-lock in wait() <0x0000000718adf1c8> (a java.lang.Thread)
+	at java.lang.Thread.join(java.base@11.0.30/Thread.java:1375)
+	at TwoThreaded.main(TwoThreaded.java:20)                                        // main calls A.join()
