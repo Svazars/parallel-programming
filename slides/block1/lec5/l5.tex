@@ -1,14 +1,11 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
-\title[]{Lecture \extraBasicsNum: \extraBasicsTopic}
-\subtitle[]{\extraBasicsKey}
+\title[]{Lecture \patternsNum: \patternsTopic}
+\subtitle[]{\patternsKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
 
 \date{}
-
-
-\newcommand{\taskJCStress}{5.1}
 
 \begin{document}
 
@@ -17,12 +14,14 @@
   \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l5.pdf}
 \end{frame}
 
-
 \begin{frame}{In previous episodes}
 
-Concurrent coordination concepts:
+Basic tools for thread coordination
 \begin{itemize}
-    \item Mutual exclusion, Signalling, Group-level concurrency, Separation of threads and tasks
+    \item Mutual exclusion
+    \item Signalling: one-to-one and broadcast
+    \item Group-level concurrency
+    \item Pooling of computation agents and separating task from particular executor
 \end{itemize}
 
 Concurrent data structures:
@@ -30,966 +29,1577 @@ Concurrent data structures:
     \item \texttt{Lock}, \texttt{Condition}, \texttt{Monitor}, \texttt{CountDownLatch}, \texttt{Semaphore}, \texttt{ReadWriteLock}
 \end{itemize}
 
-Key properties of concurrent algorithm:
+Thread-specific data could be used for caching: 
 \begin{itemize}
-    \item Safety, Liveness, Performance
+  \item replication, snapshotting
 \end{itemize}
 
-Common problems:
+Be aware of
 \begin{itemize}
-    \item Safety: race condition, data race, deadlock, lost signal, predicate invalidation
-    \item Liveness: livelock, priority inversion, fairness  
-    \item Performance: lock convoy, thundering herd, oversubscription
-\end{itemize}
-
-Widely adopted concurrency designs that could complicate development:
-\begin{itemize}
-  \item Asynchronous exceptions, Cancellation/interruption, Timeouts
-\end{itemize}
-
-Decomposition ideas:
-\begin{itemize}
-  \item State machines, Partitioning, Ownership, Batching, Weakening
+    \item Race conditions, data races, visibility, concurrent consistency
+    \item Progress guarantees: deadlock, priority inversion, fairness, resource-constrained deadlock 
+    \item Logical errors related to signalling: lost signal, spurious wakeup, predicate invalidation
+    \item Performance: thundering herd, oversubscription
 \end{itemize}
 \end{frame}
-
-\newcommand{\painpointsslide}{
-\begin{frame}{Pain points}
-
-\begin{itemize}
-  \item Unpredicatable speed of execution
-  \item Arbitrary "whole program control flow"
-  \begin{itemize}
-    \item \texttt{Thread.start} looks like \texttt{goto}
-  \end{itemize}
-  \item Arbitrary "thread-specific control flow"
-  \begin{itemize}
-    \item timeout, notification, interruption, spurious wakeup
-  \end{itemize}
-
-  \item Limited composability of modules 
-  \begin{itemize}
-    \item locking policy is not clear
-    \item lock ordering hidden by virtual methods
-    \item exposed \texttt{synchronized}
-    \item non-documented thread-safety    
-  \end{itemize}
-
-  \item Hard to diagnose performance problems 
-  \begin{itemize}
-    \item livelock, priority inversion, thundering herd, scalability 
-  \end{itemize}
-
-  \item It is \textbf{too easy} to introduce a race condition
-  \begin{itemize}
-    \item it is \textbf{too hard} to find it on review, during testing, debug on production system
-  \end{itemize}
-\end{itemize}
-\end{frame}  
-}
-
-\painpointsslide
-
-\questiontime{Concurrency is a very complicated programming domain. What could we do to simplify our programming life?}
-
 
 \begin{frame}{Lecture plan}
 \tableofcontents
 \end{frame}
 
+\section{Thread-safe counters}
+\showTOCSub
 
-\section{Public API}
-\showTOC
-
-\subsection{Documentation}
-
-\begin{frame}{Documentation}
-
-Reading \only<3->{and \textbf{writing}} the docs:
-\begin{itemize}
-  \item Thread-safety of a class
-  \item How to use class to avoid inconsistent state (e.g. \texttt{try-finally} for \texttt{Lock})
-  \item Blocking operations
-  \item Locking policy
-  \item Admission policy
-  \item Inheritance policy
-\end{itemize}
-
-\pause
-
-\only<2> {Writing the docs:}
-
-\pause
-\pause
-
-\texttt{java.util.concurrent} is a good source for inspiration
-
-\end{frame}
-
-\questiontime{Nobody reads the documentation! How could I \textvf{enforce} usage patterns of my precious class?}
-
-\subsection{Concurrent invariants}
-
-\begin{frame}[fragile]{Invariants checking}
-
-Single-threaded code crashes with \texttt{ConcurrentModificationException}\footnote{\tiny\url{https://stackoverflow.com/questions/3184883/concurrentmodificationexception-for-arraylist}}:
+\begin{frame}[t,fragile]{Synchronized counter}
 
 \begin{minted}{java}
-void foo(List<X> list) {  
-  for (X x : list) {
-    if (!x.isValid()) list.remove(x);
+final class SynchronizedCounter {
+  private long data;
+  public SynchronizedCounter(long initial) { 
+    data = initial; 
+  }
+  public synchronized long get() { 
+    return data; 
+  }
+  public synchronized void add(long delta) { 
+    data += delta; 
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Read-mostly counter}
+
+\begin{minted}{java}
+final class ReadMostlyCounter {
+  private long data;
+  private ReadWriteLock rw = new ReentrantReadWriteLock();
+  public ReadMostlyCounter(long initial) { data = initial; }
+  public long get() { 
+    rw.readLock().lock();
+    try { return data; } 
+    finally { rw.readLock().unlock(); }
+  }
+  public void add(long delta) { 
+    rw.writeLock().lock();
+    try { data += delta; } 
+    finally { rw.writeLock().unlock(); }
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Write-mostly counter: lock splitting}
+
+\begin{minted}{java}
+final class SynchronizedCounter {
+  private long data;
+  public SynchronizedCounter(long initial) { 
+    data = initial; 
+  }
+  public synchronized long get() { 
+    return data; 
+  }
+  public synchronized void add(long delta) { // <------ lock splitting
+    data += delta; 
   }
 }
 \end{minted}
 
+\textbf{Reminder}: Homework Task 2.4 (Medium)
+\end{frame}
+
+\begin{frame}[t,fragile]{Write-mostly counter: distributed counter}
+
+Distributed counter:
+\begin{itemize}
+    \item \texttt{N} independent \texttt{long} slots -- 1 slot per thread
+    \item Every user of distributed counter should register itself
+    \item Thread \texttt{add}s to its own slot (no contention)
+    \item Thread \texttt{get}s from all slots (could take time)
+\end{itemize}
+\end{frame}
+
+\questiontime{''1 slot per thread''. Which Java class should I use?}
+\questiontime{''user of distributed counter should register itself''. Should it be reenterable operation?}
+\questiontime{
+    \begin{itemize}
+        \item Thread \texttt{add}s to its own slot (no contention)
+        \item Thread \texttt{get}s from all slots (could take time)
+    \end{itemize}
+    Do you know data structure that divides threads into two groups: ''many simultaneous'' and ''only one''?
+}
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: thread-private slots}
+
+\begin{itemize}
+    \item \texttt{N} independent \texttt{long} slots -- 1 slot per thread    
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  class Slot { long data; }
+  static final ThreadLocal<Slot> mySlot = new ThreadLocal<>() {
+    protected Slot initialValue() { return null; }
+  };
+  boolean thisThreadIsRegistered() { 
+    return mySlot.get() != null; 
+  }
+  void ensureRegistered() {
+    if (!thisThreadIsRegistered()) { mySlot.set(new Slot()); }
+}}
+\end{minted}
+
 \pause
 
-It is intended behaviour\footnote<2->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/ArrayList.html}}
-\begin{quote}
-  The iterators returned by this class's `iterator` ... are fail-fast: if the list is structurally modified at any time after the iterator is created, in any way except through the iterator's own `remove` or `add` methods, the iterator will throw a `ConcurrentModificationException`. Thus, in the face of concurrent modification, the iterator fails quickly and cleanly, rather than risking arbitrary, non-deterministic behavior at an undetermined time in the future. 
-\end{quote}
+\begin{itemize}
+    \item Thread-safe?
+\end{itemize}
 
 \end{frame}
 
-\questiontime{How to implement such consistency check (collection is not modified while iterator is used)?}
 
-\begin{frame}[fragile]{Invariants checking}
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: thread-specific lazy initialization}
+
+\begin{itemize}
+    \item Every user of distributed counter should register itself
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  ...
+  void add(long delta) {
+    ensureRegistered();
+    ???
+    ???
+    ???
+  }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: scalable add}
+
+\begin{itemize}
+    \item Thread \texttt{add}s to its own slot (no contention)    
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  void add(long delta) {
+    ensureRegistered();
+    ???
+    ???
+    ???
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: scalable add}
+
+\begin{itemize}
+    \item Thread \texttt{add}s to its own slot (no contention)    
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  void add(long delta) {
+    ensureRegistered();
+    rw.readLock().lock();
+    try { mySlot.get().data++;} 
+    finally { rw.readLock().unlock(); }
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: consistent get}
+
+\begin{itemize}
+    \item Thread \texttt{get}s from all slots (could take time)
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  long get() {
+    ???
+    ???
+    ???
+  }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: consistent get}
+
+\begin{itemize}
+    \item Thread \texttt{get}s from all slots (could take time)
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  long get() { rw.writeLock().lock();
+               try { ??? } 
+               finally { rw.writeLock().unlock(); }
+             }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: consistent get}
+
+\begin{itemize}
+    \item Thread \texttt{get}s from all slots (could take time)
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  long get() { rw.writeLock().lock();
+               try { ??? }  
+               finally { rw.writeLock().unlock(); }
+             }
+  final List<Slot> lst = new ArrayList<>();
+  void ensureRegistered() {
+    if (thisThreadIsRegistered()) { return; }
+    mySlot.set(new Slot());
+    rw.writeLock().lock(); 
+    try { lst.add(mySlot.get()); } finally { rw.writeLock().unlock(); }
+}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Distributed counter: consistent get}
+
+\begin{itemize}    
+    \item Thread \texttt{get}s from all slots (could take time)
+\end{itemize}
+
+\begin{minted}{java}
+class DistributedCounter {
+  final ReadWriteLock rw = new ReentrantReadWriteLock();
+  long get() { rw.writeLock().lock(); long result = 0;
+               try { for (var slot: lst) { result += slot.data; } }  
+               finally { rw.writeLock().unlock(); }
+               return result; }
+  final List<Slot> lst = new ArrayList<>();
+  void ensureRegistered() {
+    if (thisThreadIsRegistered()) { return; }
+    mySlot.set(new Slot());
+    rw.writeLock().lock(); 
+    try { lst.add(mySlot.get()); } finally { rw.writeLock().unlock(); }
+}}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile]{Distributed counter: takeaways}
+
+\begin{itemize}
+    \item Read-mostly and write-mostly designs could be quite different
+    \item \texttt{ThreadLocal} helps to organize uncontended execution
+    \item \texttt{ReadWriteLock} splits threads into two groups
+    \begin{itemize}
+        \item Not necessarily readers and writers!
+    \end{itemize}    
+\end{itemize}
+
+\pause
+Teaser 
+\pause
+\begin{itemize}
+    \item Replication + Snapshotting + Distributed systems = Headache 
+    \pause 
+    \begin{itemize}
+        \item Wait-free snapshots (Lecture~\foundationsPlusNum)
+        \item ABA problem (Lecture~\atomicsNum)
+        \item Replication on CPU level (Lecture~\cacheCoherencyNum)
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads with identical environment, eagerly or on-demand
+    \begin{itemize}
+      \item How to achieve this?
+    \end{itemize}
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes
+    \begin{itemize}
+      \item What are the main design decisions that are associated with mutexes?
+    \end{itemize}
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result from computation
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result from computation (\texttt{Future})
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result from computation (\texttt{Future})
+    \begin{itemize}
+      \item ... or stream of results
+    \end{itemize}
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result from computation (\texttt{Future})
+    \begin{itemize}
+      \item ... or stream of results (\texttt{CompletionService}) 
+    \end{itemize}
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result(s) from computation (\texttt{Future}, \texttt{CompletionService})    
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result(s) from computation (\texttt{Future}, \texttt{CompletionService})
+    \item Monitor/debug multithreaded software    
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result(s) from computation (\texttt{Future}, \texttt{CompletionService})
+    \item Monitor/debug multithreaded software (\texttt{jstack})    
+\end{itemize}
+}
+
+\questiontime{We know so much ways to coordinate multiple threads:
+\begin{itemize}
+    \item Start threads, eagerly or on-demand (\texttt{ThreadFactory}, \texttt{ExecutorService})
+    \item Handle contention with mutexes (reentrant, fair, read-write)
+    \item Coordinate groups of threads (\texttt{CountDownLatch}, \texttt{Semaphore})
+    \item Abstract asynchronous result(s) from computation (\texttt{Future}, \texttt{CompletionService})
+    \item Monitor/debug multithreaded software (\texttt{jstack})    
+\end{itemize}
+We can \textbf{start} and \textbf{control} concurrent computation till the \textbf{termination}.
+\newline What else do we need?
+}
+
+\section{Cancellation}
+\showTOC
+
+\begin{frame}{Cancellation}
+
+Program initiated some task and then
+\begin{itemize}
+    \item user is no more interested in the result
+    \item expected result is known to be out-of-date
+    \item a lot of tasks with higher priority appeared
+    \item program intentionally started several identical tasks\footnote{\tiny\url{https://cacm.acm.org/research/the-tail-at-scale/}}
+\end{itemize}
+
+so we need to
+\begin{itemize}
+    \pause \item \textbf{cancel} not-yet-started task; or
+    \pause \item \textbf{interrupt} already running task    
+\end{itemize}
+to save CPU/RAM/network bandwith/...
+\end{frame}
+
+\questiontime{Is it always a good idea to \textbf{cancel} not-yet-started task when the result is not needed?} 
+
+\subsection{Cancelling Future}
+
+\begin{frame}[t,fragile]{Future states}
+
+\begin{minted}{java}
+  enum FutureState { Created, Submitted, Running, Canceled, Terminated }
+  // +---------+    +-----------+    +---------+    +------------+
+  // | Created | -> | Submitted | -> | Running | -> | Terminated |
+  // +---------+    +-----------+    +---------+    +------------+
+  //                     |
+  //                     V
+  //                +-----------+
+  //                | Canceled  |
+  //                +-----------+
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Future states}
+
+{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CancellationException.html}}
+\begin{minted}{java}
+  enum FutureState { Created, Submitted, Running, Canceled, Terminated }
+  class MyFuture<V> { FutureState state; MyFuture() { this.state = Created; }
+    synchronized boolean tryCancel() {      
+      assert state != Created;
+      if (state == Running || state == Terminated)  { return false; }
+      if (state == Canceled) { return true; }
+      assert state == Submitted;
+      state = Canceled; return true;
+    }
+    V get() throws ExecutionException {
+      synchronized(this) {
+        if (state == Canceled) { throw new CancellationException(); }
+        ...
+      }
+    }
+  }
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Future states}
+\begin{minted}{java}
+  enum FutureState { Created, Submitted, Running, Canceled, Terminated }
+  class MyExecutorService {
+    void submit(Callable<V> c) {
+      var f = new MyFuture<>(c); f.state = Submitted; blockingQueue.add(f);
+    }
+    void worker(MyFuture f) {
+      synchronized(f) {        
+        if (f.state == Canceled) { handleCancel(f); return; }
+        assert f.state == Submitted;
+        f.state = Running;
+      }
+      try     { doComputation(f); }
+      finally { synchronized(f) { f.state = Terminated; } }
+    }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}{Pattern: concurrent state machine}
+
+\begin{itemize}
+    \item At any moment, state of concurrent object is explicitly defined
+    \item All transitions happen atomically (e.g. under \texttt{Lock})
+    \item Every state defines \textbf{allowed} and \textbf{forbidden} operations  
+\end{itemize}
+
+\pause
 
 Advantages:
 \begin{itemize}
-  \item Contract is enforced by implementation rather by javadoc
-  \item Fail-fast behaviour speed-ups debugging
-  \item Type of exception and stacktrace information help to debug large systems 
+    \item Easy to use
+    \item Simple to implement
+    \item Trivial to debug using logging
 \end{itemize}
 
+\pause
 Disadvantages:
 \begin{itemize}
-  \item Performance overheads
-  \item Incompleteness (impossible to cover all misuses)
-  \item Affects even single-threaded programs
+    \item \textit{Could} limit parallelism
+    \item Some concurrent objects have infinite amount of states
+\end{itemize}
+
+\pause
+Tricks: 
+\begin{itemize}
+    \item use equivalence classes as ''states'' (concurrent queue is \texttt{EMPTY, NON\_EMPTY, FULL})
+    \item create a separate ''control structure'' for accessing your inner data (\texttt{Executor.submit} vs. \texttt{Executor.taskQueue.add})
 \end{itemize}
 \end{frame}
 
-\questiontime{How could we implement lightweight or zero-cost checks?}
 
-
-\begin{frame}[fragile]{Assertions}
-
-Assertions\footnote{\tiny\url{https://docs.oracle.com/javase/specs/jls/se11/html/jls-14.html#jls-14.10}}:
-
-\begin{minted}{java}
-void foo(ArrayList<String> list) {
-  assert list != null;
-  assert list.size() > 0;
-}
-\end{minted}
-
-\pause
-
-\begin{quote}
-Typically, assertion checking is enabled during program development and testing, and disabled for deployment, to improve performance.
-\end{quote}
-
-\pause
-
-\begin{quote}
-Because assertions may be disabled, programs must not assume that the expressions contained in assertions will be evaluated. Thus, these boolean expressions should generally be free of side effects. 
-\end{quote}
-
-\pause
-
-\begin{quote}
-In light of this, assertions should not be used for argument checking in public methods. Argument checking is typically part of the contract of a method, and this contract must be upheld whether assertions are enabled or disabled.
-\end{quote}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Assertions}
+\begin{frame}{Pattern: cancellation of not-yet-processed tasks}
 
 \begin{itemize}
-  \item Could be enabled/disabled without recompilation of Java program\footnote{\tiny\url{https://docs.oracle.com/javase/8/docs/technotes/guides/language/assert.html}}
-  \begin{itemize}
-    \item Many guidelines enforce \texttt{java -ea -esa -jar production.jar ...}
-  \end{itemize}
+  \item Many threads create workload (stream of tasks)
+  \item Many threads process data (execute tasks)
+\end{itemize}
 
-  \item Should be used for checking \textbf{internal consistency} (violation of programmer's intent), not \textbf{external consistency} (e.g validation of user input)
+How to find ''submitted but not yet started'' tasks?
 
-  \item Perfect choice to make concurrent programs fail-fast
+\begin{itemize}
+  \item Inspect thread-safe ''submission queue''
+  \pause \item What if there are many queues?
+\end{itemize}
+
+Do not try to control submission protocol, operate on task level
+
+Disadvantages: 
+\begin{itemize}
+  \item more synchronized operations on fast-path
+  \item quite complicated if you have different \texttt{Future} objects that represent the same task 
   \begin{itemize}
-    \item Use \texttt{-enablesystemassertions} to fail-fast on subtle data races inside improperly used classes from standard library (e.g. unsynchronized access to \texttt{ArrayList})
+    \item remember \texttt{CompletionService} and \texttt{AlreadyCompletedFuture}?
   \end{itemize}
 \end{itemize}
 \end{frame}
 
+\begin{frame}[fragile]{Concurrent state machine training}
 
-\begin{frame}[fragile]{Optional heavyweight checks}
-
-\begin{minted}{java}
-class MyLinkedList {
-  private int cachedLength;
-  private Node head;
-  private int length() {
-    int size = 0;
-    for (Node n = this.head; n != null; n = n.next, size++) {}
-    return size;
-  }
-  public void add(Node e) {
-    e.next = this.head;
-    this.head = e;
-    elementCount++;
-    assert cachedLength == length();
-  }
-}
-\end{minted}
-
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Optional heavyweight checks}
-
-\begin{minted}{java}
-class MyLinkedList {
-  private int cachedLength;
-  private Node head;
-  private int length() {
-    int size = 0;
-    for (Node n = this.head; n != null; n = n.next, size++) {}
-    return size;
-  }
-  public void add(Node e) {
-    e.next = this.head;
-    this.head = e;
-    elementCount++;
-    assert heavyChecksDisabled() || cachedLength == length();
-  }
-}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}{Optional heavyweight checks}
-
-\begin{itemize}
-  \item Could find non-local data inconsistency
-  \item May be prohibitively slow for production workloads
-  \item Distort concurrent execution patterns (change probability of race condition)
-  \item May be designed to provide detailed information about failure
-\end{itemize}
-\end{frame}
-
-
-\begin{frame}{Summary: invariants}
-
-\begin{itemize}
-  \item Invariants help to make better contracts and design more reliable programs
-  \item Report failed external contracts with detailed exceptions
-  \item Check internal contracts with lightweight checks (e.g. optional \texttt{assert}s)
-  \item Consider using heavyweight checks for special modes of execution (e.g. debug builds)
-\end{itemize}
-
-\pause
-
-You can not start checking for correctness until you understand 
-\begin{itemize}
-  \item allowed
-  \item forbidden
-\end{itemize}
-result of your algorithm or data structure.
-
-\end{frame}
-
-
-\begin{frame}{Summary: concurrent invariants}
-
-Some validity rules are obvious and trivial:
-\begin{itemize}
-  \item Does not fail with \texttt{AssertionError}, \texttt{NullPointerExcepiton} ...
-  \item Deadlock never happens, data race never happens ...
-  \item ...
-\end{itemize}
-
-\pause
-
-Describing behaviour in multithreaded environment requires additional effort:
-\begin{itemize}
-  \item After data is \texttt{add}ed to thread-safe collection, some other thread eventually could \texttt{remove} it
-  \pause
-  \item only once
-\end{itemize}
-
-\pause
-
-Concurrent consistency could be hard to explain and check\footnote<4->{\tiny\url{https://en.wikipedia.org/wiki/Sequential_consistency}}:
-\begin{quote}
-  ... the result of any execution is the same as if the operations of all the processors were executed in some sequential order, and the operations of each individual processor appear in this sequence in the order specified by its program.
-\end{quote}
-
-\pause
-Lecture~\foundationsNum \ and Lecture~\foundationsPlusNum \ will heavily use complicated math to formalize \textit{consistency}.
-
-\end{frame}
-
-\section{Testing}
-\showTOC
-
-\subsection{Unit testing and stress testing}
-
-\begin{frame}{Unit testing}
-
-Focus on safety (correctness).
-
-\pause
-
-\begin{itemize}
-  \item All single-threaded scenarios
-  \item Basic multi-threaded scenarios
-  \item Advanced multi-threaded scenarios with custom scheduling (insertion of \texttt{Thread.sleep})
-\end{itemize}
-
-\pause
-Goals:
-\begin{itemize}
-  \item coverage
-  \item regression tests
-  \item supplementary documentation for intended and forbidden usages
-\end{itemize}
-
-\pause
-Tools:
-\begin{itemize}
-  \item JUnit\footnote<4->{\tiny\url{https://junit.org}} 
-  \item Java Concurrency Stress (jcstress)\footnote<4->{\tiny\url{https://github.com/openjdk/jcstress}}
-\end{itemize}
-
-\pause
-Caveats: 
-\begin{itemize}
-  \item there are few Quality Assurance (QA) engineers that are aware about concurrency pitfalls
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Homework: JCStress}
-
-Check out few solutions for Dining Philosophers Problem in JCStress repo\footnote{\tiny\url{https://github.com/openjdk/jcstress/blob/master/jcstress-samples/src/main/java/org/openjdk/jcstress/samples/problems/classic/Classic_01_DiningPhilosophers.java}}
-
-Checkout repo, run example. Modify example with some incorrect solution, observe deadlock and see how it is reported by the framework.
-
-\begin{homeworkmail}{Task \taskJCStress}
-  Send two screenshots: 
-  \begin{itemize}
-    \item incorrect solution to dining philosophers problem written in JCStress DSL
-    \item console output when you run this sample via JCStress harness
-  \end{itemize}
-}
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block1/5.1}}
+\begin{homeworkmail}{Task 5.1}
+    \begin{itemize}
+        \item Implement \texttt{ExecutorService} with \texttt{Ready, ShutDown, Terminated} life cycle
+    \end{itemize}
 \end{homeworkmail}
-
 \end{frame}
 
+\questiontime{What should I do to stop already running task?}
 
-
-
-\begin{frame}[t]{Stress testing}
-
-Focus on performance (resource utilization).
-
-\pause
-
-\begin{itemize}
-  \item Undersubscription because of critical sections
-  \item Oversubscription because of misconfigured thread pools
-  \item Inefficient contended execution path
-  \item Progress problems (livelock, priority inversion, starvation)
-\end{itemize}
-
-\pause
-
-Key metrics:
-\begin{itemize}
-  \item Throughput
-  \item Latency distribution
-  \item Resource leaks (objects, thread-local memory, thread handles, caches ...)
-  \item Scalability
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t,noframenumbering]{Stress testing}
-Focus on performance (resource utilization).
-
-Key metrics:
-\begin{itemize}
-  \item Throughput, Latency, Resource utilization, Scalability
-\end{itemize}
-
-\pause
-Tools:
-\begin{itemize}
-  \item Java Microbenchmark Harness (JMH)\footnote<2->{\tiny\url{https://github.com/openjdk/jmh}}
-  \item Lincheck\footnote<2->{\tiny\url{https://github.com/JetBrains/lincheck}}
-\end{itemize}
-
-\pause
-Caveats: 
-\begin{itemize}
-  \item high-quality performance analysis requires years of low-level expertise
-  \item "We should forget about small efficiencies, say about 97\% of the time: premature optimization is the root of all evil. Yet we should not pass up our opportunities in that critical 3\%"
-\end{itemize}
-\end{frame}
-
-
-\subsection{Execution trace analysis}
+\subsection{Forced cancellation}
 \showTOCSub
 
-\begin{frame}[fragile]{Execution trace analysis: idea}
+\begin{frame}{Forced cancellation}
+\framesubtitle{Idea}
 
-\begin{verbatim}
-  Timestamp: 1000400, Thread A: X.lock   (success)
-  Timestamp: 1000405, Thread B: Y.lock   (success)
-  Timestamp: 1000408, Thread A: X.lock   (success)
-  Timestamp: 1000411, Thread B: X.lock   (block)
-  Timestamp: 1000415, Thread A: Y.lock   (block)
-\end{verbatim}
+Operation systems allow killing processes and threads: 
+\begin{itemize}
+    \item \texttt{kill -9 <PID>}\footnote{\tiny\url{https://man7.org/linux/man-pages/man1/kill.1.html}}
+    \item \texttt{int pthread\_kill(pthread\_t thread, int sig)}\footnote{\tiny\url{https://man7.org/linux/man-pages/man3/pthread_kill.3.html}}
+
+\end{itemize}
 
 \pause
 
-\textt{Thread A} owns \texttt{X}, awaits for \texttt{Y}
+Not exactly. They provide mechanism to \textit{send a signal} to running thread which \textit{asynchronously} ''transfer'' thread execution flow into signal handler.
 
-\textt{Thread B} owns \texttt{Y}, awaits for \texttt{X}
+\pause
+
+By default, unhandled ''important'' signal (e.g. \texttt{SIGKILL}) will stop thread execution.
+
+\pause
+
+\textit{Some} concurrent systems also provide facilities for forced asynchronous thread cancellation\footnote<4->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#stop()}}.
+
+\end{frame}
+
+\questiontime{Terminate running thread at arbitrary execution point: could you predict any problems?}
+
+\begin{frame}{Forced cancellation}
+\framesubtitle{Problems}
+
+Program could be stopped at arbitrary point:
+\begin{itemize}
+    \item In the middle of file writing (corrupted data)
+    \item In the middle of DB connect (lost data)
+    \item In the middle of mutex critical section (lock leakage, deadlock)
+\end{itemize}
+
+\pause
+
+Common problems:
+\begin{itemize}
+    \item inconsistent global state
+    \item non-recoverable data corruption
+\end{itemize}
+
+\pause
+Additional level of complexity: cancellation \textbf{inside} cancellation handler.
+
+\pause
+
+Conclusion: forced cancellation in concurrent systems is \textbf{bad design}\footnote<4->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/doc-files/threadPrimitiveDeprecation.html}}
+
+\end{frame}
+
+%\questiontime{Name a highly concurrent multi-agent system which is tolerant to arbitrary agent failure by design. Hint: you use it every day.}
+
+\subsection{Cooperative cancellation: cancellation token}
+\showTOCSub 
+
+\begin{frame}{Cooperative cancellation}
+\framesubtitle{Idea}
+
+\begin{itemize}
+    \item \texttt{Thread A} initiates cancellation
+    \item \texttt{Thread B} performs cancellation handler
+    \item \texttt{Thread A} finishes cancellation protocol
+\end{itemize}
+
+\pause
+Design challenges:
+\begin{itemize}
+    \item How to pass information from one thread to another
+    \begin{itemize}
+        \item reasonable response time  vs. non-prohibitive throughput overheads
+    \end{itemize}
+
+    \item When to handle cancellation request
+    \begin{itemize}
+        \item immediately, even inside of ''critical code path''
+        \item defer processing
+        \item ordering among received requests
+        \item deduplication/queueing of requests
+    \end{itemize}
+
+    \item What to do after cancellation handling
+    \begin{itemize}
+        \item Send confirmation response
+        \item Stop thread/throw exception/continue execution
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Cancellation token}
+
+\begin{minted}{java}
+final class CancellationToken {
+    private boolean canceled = false;
+    public synchronized boolean isCanceled() { return this.canceled; }
+    public synchronized void cancel() { this.canceled = true; }
+}
+\end{minted}
+
+\pause
+
+\begin{itemize}
+    \item How to pass information from one thread/task to another: lock + state variable
+    \item When to handle cancellation request: when thread/task is ready to cooperate
+    \item What to do after cancellation handling: up to receiver
+\end{itemize}
+
+\pause
+
+Maybe useful in single-threaded \footnote<3->{\tiny\url{https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal}} and in multi-threaded\footnote<3->{\tiny\url{https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken}} environment.
 
 \end{frame}
 
 
-\begin{frame}[fragile]{Examples of nontrivial consistency}
+\begin{frame}[t,fragile]{Using cancellation token for threads}
 
-\begin{verbatim}
-  Timestamp: 1, Thread A: list.add(User(1))
-  Timestamp: 2, Thread B: list.add(User(2))
-  Timestamp: 3, Thread C: list.removeAny(), result = User(2)
-  Timestamp: 3, Thread D: list.removeAny(), result = null
-  Timestamp: 5, Thread A: list.removeAny(), result = User(2)
-\end{verbatim}
-
-\pause
-
-Where is \texttt{User(1)}?
-
-\pause
-
-Why \texttt{User(2)} was removed twice?
-
+\begin{minted}{java}
+void main() {
+  var token = new CancellationToken();
+  new Thread(() -> {
+    while (!token.isCanceled()) { doSomething(); }
+  }).start();  
+  ...
+  token.cancel();
+}
+\end{minted}
 \end{frame}
 
-\begin{frame}{Execution trace analysis}
- 
+\begin{frame}[t,fragile]{Using cancellation token for tasks}
+\begin{minted}{java}
+void main() {
+  var token = new CancellationToken();
+  executor.execute(() -> {
+    while (!token.isCanceled()) { doSomething(); }
+  });
+  ...
+  token.cancel();
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile]{Using cancellation token for loops}
+\begin{minted}{java}
+void worker() {
+  while (!token.isCanceled()) { 
+    doSomething(); 
+  }
+}
+void doSomething() {
+  for (long i = 0; i < gazillion(); i++) { 
+    compute(i); 
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Using cancellation token for loops}
+\begin{minted}{java}
+void worker() {
+  while (!token.isCanceled()) { 
+    doSomething(token); 
+  }
+}
+void doSomething(CancellationToken token) {
+  for (long i = 0; i < gazillion(); i++) { 
+    if (token.isCanceled()) { throw new CancelledException(); }
+    compute(i);
+  }
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Using cancellation token for loops}
+\begin{minted}{java}
+void worker() {
+  while (!token.isCanceled()) { 
+    doSomething(token); 
+  }
+}
+void doSomething(CancellationToken token) {
+  for (long i = 0; i < gazillion(); i++) { 
+    if (token.isCanceled()) { throw new CancelledException(); }
+    compute(i);
+  }
+}
+void compute(long i) {
+  Thread.sleep(i);
+}
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Cancellation token}
+\begin{itemize}
+    \item easy to implement in any language
+    \item straightforward implementation and behaviour
+    \item supports both \textbf{thread cancellation} and \textbf{task cancellation}
+    \item languages \textbf{with exceptions} suffer (\texttt{CancelledException} from almost any method)
+\end{itemize}
+
+\pause
+
+\begin{itemize}
+    \item manual polling everywhere
+    \begin{itemize}
+        \item before \textit{any} blocking operation (synchronization, I/O)
+        \item in long loops or deep recursion
+    \end{itemize}        
+    \item requires standard library/external libraries support \onslide<3->{\textbf{for better responsiveness}}
+    \item bad composability (how many cancellation tokens should be passed to function \texttt{foo}?)
+    \item languages \textbf{without exceptions} suffer (which value to \texttt{return} if cancellation requested)
+\end{itemize}
+\end{frame}
+
+\questiontime{How many \texttt{CancellationToken}s should I pass to \texttt{Thread.sleep}?}
+
+\section{Interruption}
+\showTOCSub
+
+\subsection{Interruption points}
+
+%\begin{frame}[t]{Teaser}
+%
+%Today we will add a new \textbf{dimension} for all previously studied problems. 
+%
+%\pause
+%
+%At arbitrary moment user decides to properly cancel particular concurrent task.
+%
+%\pause
+%
+%Without ruining the whole system.
+%
+%\pause
+%
+%It could become overwhelmingly complicated, so we will study basic decomposition techniques for concurrent programs.
+%
+%\pause
+%
+%Main idea: control program complexity, avoid preliminary optimization.
+%
+%\end{frame}
+
+
+\questiontime{Imagine that we could associate a single cancellation token with every thread. Which parts of standard library should you adapt to support such token?}
+
+ \begin{frame}{Language support for interruption: long methods} 
+ Common ''long'' methods:
  \begin{itemize}
-   \item Use \textbf{monotonic} stamps\footnote{\tiny\texttt{CLOCK\_MONOTONIC} \url{https://linux.die.net/man/3/clock_gettime}}
-   \pause
-   \begin{itemize}
-     \item \texttt{System.currentTimeMillis()} is \textbf{not} monotonic, be ready to time travel\footnote<2->{\tiny\url{https://shipilev.net/blog/2014/nanotrusting-nanotime/}}
-
+     \item \texttt{Thread.sleep}
+     \item File I/O
+     \item User input
+     \item Networking
      \pause
-     \item \texttt{static synchronized long stamp() \{ return ++counter; \}} is safe approximation
-   \end{itemize}
- 
-   \pause
- 
-   \item Define obvious consistency violations
-   \begin{itemize}
-     \item Thread-safe collection cannot return \texttt{null} in moment \texttt{t2} if element was added at \texttt{t1 < t2}
-     \item Thread-safe collection cannot remove the same element twice if it was added only once
-     \item ...
-   \end{itemize}
- 
-   \pause
-   \item Collect execution trace (e.g. log file) from some scenario and check validity
- 
-   \pause
-   \item You could implement simple "reference solution"\ and check that it provides the same result on given execution trace\footnote<6->{\tiny\url{https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3}}
+     \item User-specified functions
  \end{itemize}
  
-\end{frame}
-
-\questiontime{How could I check that requirements for my data structure are complete, consistent, strong enough/weak enough?}
-
-\questiontime{How could I check that requirements for my data structure are complete, consistent, strong enough/weak enough? 
-
-Reconsider your answer after Lecture~\foundationsPlusNum.
+ \pause 
+ Overview:
+ \begin{itemize}
+  \item Some methods are marked as ''interruption points''
+  \pause \item \texttt{Thread A} prepares to handle interrupt requests (long method may return ''exceptionally'')
+  \pause \item \texttt{Thread B} requests interrupt which will be \textbf{eventually} delivered to \texttt{Thread A}.
+ \end{itemize}
+\pause
+\textbf{Concurrency is hard}: ''interrupted'' task may finish with success
+ \end{frame}
 }
 
-\subsection{Test design to increase bug probability}
-\showTOCSub
-
-\begin{frame}{Common errors}
-
-\pause
-\begin{itemize}
-  \item Use delays (e.g. \texttt{Thread.sleep(100)}) to ensure that "other thread done something"
-  \begin{itemize}
-    \item use synchronized state variables, \texttt{CountDownLatch} or monitors
-  \end{itemize}
-
-  \pause
-  \item Use too strict assertions that trigger false-positive test failures
-  \begin{itemize}
-    \item formalize invariants, drop irrelevant constraints
-  \end{itemize}
-
-  \pause
-  \item Test scenarios are missing execution patterns so could not detect some race conditions
-  \begin{itemize}
-    \item use tests with custom scheduling and aim to 100\% coverage
-  \end{itemize}
-
-  \pause
-  \item Test scenarios are missing some essential consistency checks (e.g. because of mocking)
-  \begin{itemize}
-    \item enable some lightweight fail-fast checks on production system
-    \item validate execution trace from production system
-  \end{itemize}
-
-  \pause
-  \item Ignorance of tools
-  \begin{itemize}
-    \item use test generators (property testing, fuzzers, lincheck)
-    \item use properly designed concurrency stress systems (JMH, jcstress)
-    \item do not use tools that you do not understand \pause(ChatGPT may block your skill growth)
-  \end{itemize}
-
-  \pause
-  \item Obsessive perfectionism
-  \begin{itemize}
-    \item formalize QA criteria and limit investments into testing
-  \end{itemize}
-
-\end{itemize}
-\end{frame}
-
-
-\begin{frame}[fragile]{Common errors: sample v1}
-
-\begin{minted}{java}
-static int x = 0; static Object lock = new Object();
-void thread_1() {
-  synchronized(lock) {
-    assert x == 0;
-    lock.wait();
-    assert x == 1;
-  }
-}
-void thread_2() {
-  sleep(100); // allow thread_1 to grab lock
-  synchronized(lock) {
-    x++;
-    lock.notify();
-  }
-}
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Common errors: sample v2}
-
-\begin{minted}{java}
-static int x = 0; static Object lock = new Object();
-void thread_1() {
-  synchronized(lock) {
-    assert x == 0;
-    lock.wait();
-    assert x == 1;
-  }
-}
-void thread_2() {
-  // sleep(100);
-  synchronized(lock) {
-    x++;
-    lock.notify();
-  }
-}
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Common errors: sample v3}
-
-\begin{minted}{java}
-static int x = 0; static Object lock = new Object();
-void thread_1() {
-  synchronized(lock) {
-    // assert x == 0;
-    lock.wait();
-    assert x == 1;
-  }
-}
-void thread_2() {
-  // sleep(100);
-  synchronized(lock) {
-    x++;
-    lock.notify();
-  }
-}
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Common errors: sample v4}
-
-\begin{minted}{java}
-static int x = 0; static Object lock = new Object();
-void thread_1() {
-  synchronized(lock) {
-    // assert x == 0;
-    if (x == 0) lock.wait();
-    assert x == 1;
-  }
-}
-void thread_2() {
-  // sleep(100);
-  synchronized(lock) {
-    x++;
-    lock.notify();
-  }
-}
-\end{minted}
-\end{frame}
-
-\begin{frame}{Validation: required mindset}
-
-"Is parallel programming hard, and, if so, what can you do about it?" (a.k.a. perfbook)\footnote{\tiny\url{https://github.com/paulmckrcu/perfbook}}
-
-Chapter 11 "Validation":
-
-\pause
-
-\begin{itemize}
-  \item The only bug-free programs are trivial programs
-  \pause
-  \item A reliable program has no known bugs
-\end{itemize}
-
-\pause
-Conclusion: \pause any reliable non-trivial program contains at least one bug that you do not know about.
-
-\end{frame}
-
-\begin{frame}{Enough is enough: estimate bug probability}
-
-We will discuss the simplest discrete test scenario:
-\begin{itemize}
-  \item Individual test run either fails or successfully finishes\footnote{Continuous test example: run 1 minute under heavy contention, ensure no exception happen}
-\end{itemize}
-
-\pause
-Probability of single failure $f$ (e.g. $0.1$, 10\%)
-
-\pause
-Probability of single success  $1 - f$ (e.g. $0.9$, 90\%)
-
-\pause
-Probability n repeats will succeed $S_n=(1-f)^n$
-
-\pause
-Probability of failure $F_n=1-(1-f)^n$
-
-\pause
-"How many times should we run the test to cause the probability of failure to rise above 99\%?" \pause
-
-$$n=\frac{log(1-F_n)}{log(1-f)}$$
-
-\end{frame}
-
-
-\begin{frame}{Be careful. It is real world out there.}
-
-As of 2017 Linux kernel was estimated to have more than 20 billion instances running throughout the world.
-
-Bug that occurs once every million years on a single system will be encountered more than \pause 50 times per day.
-
-\pause
-
-Any mission-critical software for
-\begin{itemize}
-  \item health\footnote<3->{\tiny\url{https://en.wikipedia.org/wiki/Therac-25}}
-  \item aerospace\footnote<3->{\tiny\url{https://en.wikipedia.org/wiki/Ariane_flight_V88}}
-  \item military\footnote<3->{\tiny\url{https://devblogs.microsoft.com/oldnewthing/20180228-00/?p=98125}}
-\end{itemize}
-is also not satisfied with "just testing". We will talk a little bit about this problem at the very end of this Lecture.
-\end{frame}
-
-\section{Tooling}
-\showTOC
-
-\subsection{Static checks}
-
-\begin{frame}{Static code analysis}
-
-\begin{itemize}
-  \item Java FindBugs \url{https://findbugs.sourceforge.net}
-  \begin{itemize}
-    \item \url{https://findbugs.sourceforge.net/bugDescriptions.html}, search for "synchronized"\ or "concurrent"
-    \item "Finding Concurrency Bugs In Java" by David Hovemeyer and William Pugh\footnote{\tiny\url{https://www.cs.jhu.edu/~daveho/pubs/csjp2004.pdf}}
-  \end{itemize}
-
-  \item IneliJ IDEA inspections and analysis, interactive debugger\footnote{\tiny\url{https://www.jetbrains.com/help/idea/detect-concurrency-issues.html}}
-
-  \item "Java Concurrency in Practice" (JCIP) \url{https://jcip.net/annotations/doc/index.html}
-\end{itemize}
-
-\end{frame}
-
-\subsection{Dynamic checks}
-
-\begin{frame}{Dynamic checks}
-
-\begin{itemize}
-  \item Assertions
-  \item Configurable heavyweight checks
-  \item Configurable loggers and other dependency injection ideas
-  \item Using compile-time program rewriting\footnote{\tiny\url{https://en.wikipedia.org/wiki/Aspect-oriented_programming}}
-  \item Using run-time program transformation\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.instrument/java/lang/instrument/package-summary.html}}
-\end{itemize}
-
-\pause
-Other languages also support dynamic checks, popular term is "sanitizers"\ or "race detectors":
-\begin{itemize}
-  \item \url{https://valgrind.org}
-  \item \url{https://valgrind.org/docs/manual/hg-manual.html}
-  \item \url{https://go.dev/doc/articles/race_detector}
-  \item \url{https://docs.kernel.org/dev-tools/ubsan.html}
-  \item \url{https://clang.llvm.org/docs/AddressSanitizer.html}
-\end{itemize}
-\end{frame}
-
-
-\subsection{Monitoring}
-
-\begin{frame}{Monitoring}
-
-\begin{itemize}
-  \item \url{https://docs.oracle.com/en/java/javase/11/tools/jstack.html}
-  \item \url{https://docs.oracle.com/en/java/javase/11/tools/jmap.html}
-  \item \url{https://docs.oracle.com/en/java/javase/11/tools/jcmd.html}
-  \item \url{https://eclipse.dev/mat}
-  \item \url{https://axiomjdk.ru/announcements/2024/10/22/jdk-flight-recorder}
-  \item infinite number of commercial tools
-\end{itemize}
-
-\pause
-
-Using \texttt{ThreadFactories} and \texttt{Executors} allows you to debug component-by-component
-\begin{itemize}
-  \item Inefficient but correct implementation
-  \item Implementation with extensive logging
-\end{itemize}
-
-\end{frame}
-
-\subsection{Chaos mode execution}
-\showTOCSub
-
-\painpointsslide
-
-\begin{frame}[t]{Need for speed}
-
-\begin{itemize}
-  \item Unpredicatable speed of execution
-\end{itemize}
-
-\pause
-
-\begin{itemize}
-  \item Hard to detect bugs
-  \item Hard to reproduce problems
-  \item Hard to verify issue is fixed
-\end{itemize}
-
-\end{frame}  
-
-\questiontime{Could we change timings of multi-threaded program?}
-
-\begin{frame}{Scheduling control: language level}
-
-Custom scheduling using language primitives:
-\begin{itemize}
-  \item Arbitrary \texttt{Thread.sleep} here and there
-  \begin{itemize}
-    \item Dependency injection/inheritance/interfaces
-    \item AspectJ
-    \item Java agents and bytecode transformers
-  \end{itemize}
-  
-  \pause
-
-  \item Guided insertion of randomized delay for synchronization operations
-  \begin{itemize}
-    \item Efficient Scalable Thread-Safety-Violation Detection\footnote<2->{\tiny\url{https://rohan.padhye.org/files/tsvd-sosp19.pdf}}
-  \end{itemize}
-
-  \pause
-
-  \item Analysis of communication points (memory locations)
-  \begin{itemize}
-    \item Snowboard: Finding Kernel Concurrency Bugs through Systematic Inter-thread Communication Analysis\footnote<3->{\tiny\url{https://sishuaigong.github.io/pdf/sosp21-snowboard.pdf}}
-  \end{itemize}
-\end{itemize}
-\end{frame}
-
-\questiontime{Who controls \textbf{all} timings of multi-threaded program?}
-
-\begin{frame}{Scheduling control: OS level}
-
-OS scheduler:
-\begin{itemize}
-  \item Scheduling policy (round-robin, shortest remaining time ...)
-  \item Thread priorities, Scheduling quantum, Context switch, Fairness, Real-time
-\end{itemize}
-
-\pause
-
-Pinning/affinity\footnote<2->{\tiny\url{https://en.wikipedia.org/wiki/Processor_affinity}}:
-\begin{itemize}
-  \item \texttt{Thread A} could be executed only by \texttt{Processor 1} or \texttt{Processor 7}
-  \item \texttt{taskset}\footnote<2->{\tiny\url{https://man7.org/linux/man-pages/man1/taskset.1.html}}, \texttt{numactl}\footnote<2->{\tiny\url{https://linux.die.net/man/8/numactl}}
-\end{itemize}
-
-\pause
-
-Replace/record OS scheduling decisions to enable deterministic execution:
-\begin{itemize}
-  \item Reproducible container\footnote<3->{\tiny\url{https://github.com/facebookexperimental/hermit}}
-  \item Lightweight record-replay\footnote<3->{\tiny\url{https://rr-project.org/}}
-  \item Time-travel debugging\footnote<3->{\tiny\url{https://en.wikipedia.org/wiki/Time_travel_debugging}}
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Chaos mode}
-
-\begin{itemize}
-  \item Multi-threaded program executed by single processor (pre-emptive multitasking)
-  \item Every scheduling decision is
-  \begin{itemize}
-    \item Reproducible 
-    \item Customizable -- pseudo-random with some seed
-  \end{itemize}
-\end{itemize}
-
-\pause
-Advantages:
-\begin{itemize}
-  \item Helps to find/reproduce race conditions, data races, deadlocks
-\end{itemize}
-
-\pause
-Disadvantages:
-\begin{itemize}
-  \item Subtle concurrency problems (word tearing, visibility) are not detected
-  \item Heuristic search of "interesting"\ scheduling decisions\footnote{\tiny{Probabilistic Guarantees of Finding Bugs \ }\tiny\url{https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/asplos277-pct.pdf}}
-\end{itemize}
-
-\end{frame}
-
-
-% \section{Failure analysis}
+% this is bullshit, bionic libc abandon cancellation points
+% https://android.googlesource.com/platform/bionic/+/HEAD/docs/status.md
+% Thread cancellation (pthread_cancel). Unlikely to ever be implemented because of the difficulty and cost of implementing it, and the difficulty of using it correctly. 
+
+% \begin{frame}{Language support for cancellation points: low-level parts}
 % 
-% \begin{frame}{Diagnostics}
+% Common ''long'' methods:
+% \begin{itemize}
+%     \item \texttt{Thread.sleep}
+%     \item File I/O
+%     \item User input
+%     \item Networking
+%     \pause
+%     \item User-specified functions\footnote<2->{\tiny\url{https://man7.org/linux/man-pages/man3/pthread_testcancel.3.html}}
+% \end{itemize}
 % 
-% When problem already happened
-% - assertions/descriptive exceptions
-% - useful logs (always enabled, lightweight?)
-% - observability APi (jstack, jmap, access to machine). Netflix experience of brendan gregg
-% - TRIVIAL_MODE switch in source code (make your customers a favour) -- tremendously helps to limit debugging scope
-% - make your best to create regression scenario in CI/CD
+% \pause
+% 
+% Some methods are marked as ''cancellation points'' or ''cancelation points''\footnote<3->{\tiny\url{https://man7.org/linux/man-pages/man7/pthreads.7.html}}
+% 
+% \pause
+% 
+% \texttt{Thread A} ready to handle cancel requests\footnote<4->{\tiny\url{https://man7.org/linux/man-pages/man3/pthread_setcanceltype.3.html}} and installs handlers\footnote<4->{\tiny\url{https://man7.org/linux/man-pages/man3/pthread_cleanup_push.3.html}}.
+% 
+% \pause
+% 
+% \texttt{Thread B} requests cancelation\footnote<5->{\tiny\url{https://man7.org/linux/man-pages/man3/pthread_cancel.3.html}} which will be eventually delivered for \texttt{Thread A}.
 % 
 % \end{frame}
 
 
-\section{Summary: design of reliable concurrent software}
-\showTOC
+\begin{frame}[fragile]{Language support for interruption}
 
-\begin{frame}{Reliable concurrent software: chasing the horizon}
-
-Any error must manifest itself as soon as possible:
+Advantages:
 \begin{itemize}
-  \item Readable and complete documentation, locking policy, inheritance suggestions
-  \item External invariants (exceptions) + internal invariants (assertions)
-\end{itemize} 
+    \item similar to \texttt{CancellationToken}
+    \item responsiveness due to standard library support 
+    \begin{itemize}
+        \item proper API design (\texttt{throws InterruptedException})
+        \item low-level APIs under VM control (IO, networking)
+    \end{itemize}
+    \item fine-grained control of cancellation handling 
+    \begin{itemize}
+        \item controlled frequency of polling points
+        \item easy to organize ''uninterruptible sections''
+    \end{itemize}
+\end{itemize}
 
-Use as many validation techniques as you could:
+Disadvantages:
 \begin{itemize}
-  \item Unit testing
-  \item Stress testing
-  \item Execution trace analysis
-  \item Design tests to avoid false-positives
-  \item Estimate bug propability and required post-fix testing effort
-\end{itemize} 
+    \item similar to \texttt{CancellationToken}
+    \item still a lot of manual annotations and headache with external libraries
+    \item receiver of interrupt does not know the sender/reason
+\end{itemize}
 
-Master tools:
-\begin{itemize}
-  \item Static checks
-  \item Dynamic checks
-  \item Monitoring
-  \item Scheduling randomization
-\end{itemize} 
+\textbf{Important:} language-level cancellation API works for \texttt{Thread}s
 
 \end{frame}
 
+\questiontime{Enter into \texttt{synchronized} section should be interruptible or not interruptible? What about \texttt{Object.wait}?}
 
-\section{Formal methods: model checking}
-\showTOC
 
-\begin{frame}{Algorithm correctness}
+% \begin{frame}{Language support for cancellation points: managed language}
+% \end{frame}
+% 
+% \questiontime{What is a key difference between managed language (e.g. Java) and unmanaged language (e.g. C++)?}
+% 
+% \begin{frame}[t]{Predefined cancellation points: managed language}
+% 
+% Idea: in managed language we already have a Garbage Collection support, so any thread could be stopped if needed\footnote{\tiny\url{https://shipilev.net/jvm/anatomy-quarks/22-safepoint-polls/}}
+% 
+% Let's stop thread at arbitrary execution point and \texttt{throw new CancellationException}!
+% 
+% \pause
+% 
+% Oh, this is forced cancellation ... never mind
+% \end{frame}
 
-Use pen and paper to prove some properties.
+\begin{frame}[t]{Language support for interruption: Java}
+Common ''long'' methods:
+\begin{itemize}
+    \item \texttt{Thread.sleep}, File I/O, User input, Networking
+    \item User-specified ''interruption state checks''\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#isInterrupted()}}
+    \pause
+    \item \texttt{Some} synchronization (\texttt{Lock.lock}, \texttt{Condition.await}, \texttt{Object.wait})    
+\end{itemize}
+
+\pause
+Ability to \texttt{interrupt} executing thread\footnote<3->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#interrupt()}}
 
 \pause
 
-We will discuss required mathematics in Lecture~\foundationsNum \ and Lecture~\foundationsPlusNum.
-
-\end{frame}
-
-
-\begin{frame}{Machine-assisted deductive verification}
-
-Provers and verifiers:
+The most unfortunate naming for method: \texttt{static boolean Thread.interrupted}\footnote<4->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Thread.html#interrupted()}}
 \begin{itemize}
-  \item Coq \url{https://coq.inria.fr}
-  \item Agda \url{https://wiki.portal.chalmers.se/agda/pmwiki.php}
-  \item PVS \url{https://pvs.csl.sri.com/}
-  \item Z3 \url{https://github.com/Z3Prover/z3}
+    \item checks that \textbf{current} thread
+    \item was interrupted and
+    \item clears interrupted status
 \end{itemize}
 
 \pause
 
-There are dedicated courses on formal verification in NSU or Computer Science Center. Which are $N$ times harder than "just programming".
-
-\pause
-
-Software foundations\footnote<3->{\tiny\url{https://softwarefoundations.cis.upenn.edu/}} is $N$ times harder than SICP\footnote<3->{\tiny\url{https://en.wikipedia.org/wiki/Structure_and_Interpretation_of_Computer_Programs}}.
-
+Remember, \texttt{Future} could return one of the following results:
+\begin{itemize}
+    \item \texttt{Success<T>}, \texttt{Failure<Exception>}, \texttt{Cancellation<Exception>}, \texttt{Interruption<Exception>}
+\end{itemize}
+ 
 \end{frame}
 
+%\questiontime{Ok, Java has great standard library with many explicit interrupted checks. But when I call \texttt{Thread.sleep(1\_000)} thread goes to kernel and loses scheduling quantum. Why \texttt{Thread.interrupt} wakes up such thread? What kind of black magic is used?}
 
-\begin{frame}{Model checking}
+\begin{frame}[t]{Interruptible vs. uninterruptible methods}
 
-\textbf{This part is optional part of the course. There will be no questions related to model checking on final exam}.
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block1/5.2}}
+\begin{homeworkmail}{Task 5.2}
+  Write a program that empirically checks if the following methods are interruptible:
+  \begin{itemize}
+    \item \texttt{Thread.sleep}
+    \item \texttt{ReentrantLock.lock}
+    \item \texttt{monitor enter} in \texttt{synchronized}
+    \item \texttt{Condition.await}
+    \item \texttt{Object.wait}
+    \item \texttt{System.in.read}
+    \item \texttt{FileWriter.write}
+  \end{itemize}
+\end{homeworkmail}
+% ??? Socket.connect
+\end{frame}
+
+\begin{frame}[t]{Task vs. thread interruption}
+
+Summary:
+\begin{itemize}
+    \item User-defined \texttt{CancellationToken} 
+    \begin{itemize}
+        \item works for threads and for tasks
+        \item has limited responsiveness
+    \end{itemize}
+    \item Language-designed thread interruption points 
+    \begin{itemize}
+        \item work only for threads
+        \item allow to quickly respond from almost any code
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\questiontime{Suppose I can interrupt threads. How to implement interruption of tasks?}
+
+\begin{frame}[t]{Task vs. thread interruption}
+
+Let's implement task interruption on top of thread interruption
 
 \pause
 
 \begin{itemize}
-  \item Hydraconf, "Java Path Finder: going to Mars without bugs and deadlocks" \ \url{https://youtu.be/dgHbSL_aDs0?si=vi81xieQ4zKRECQG}
-  \item Heisenbug, "Java Path Finder: летим на Марс без багов и дедлоков" \ \url{https://youtu.be/sQSwShW_IlI?si=ZMlKKLQxMZYhk1T7}
+    \item Running task should know current ''carrier'' thread (\texttt{Executor} internals)
+    \item \texttt{InterruptedException} should be properly cleared from worker thread to not affect subsequent tasks
+    \item No race conditions on interruptions allowed (\texttt{spurious interrupts} are forbidden)
+    \item Handle interruption status for not-yet-started and already-finished tasks
+    \item Be ready for successfully finished interrupted tasks 
 \end{itemize}
+
+\pause
+\textbf{Concurrency is hard}: making your own \texttt{Executor}/\texttt{ThreadPool} is not easy
+\end{frame}
+
+
+\begin{frame}[t]{Language support for interruption: other managed languages}
+
+Different languages use various policies for cancellation/interruption in standard library.
+
+\pause
+
+The most elaborate and widely adopted designs belong to languages with lightweight threading:
+\begin{itemize}
+    \item Go \footnote<2->{\tiny\url{https://go.dev/blog/context}}, managed language without exceptions
+    \item Kotlin \footnote<2->{\tiny\url{https://kotlinlang.org/docs/cancellation-and-timeouts.html#asynchronous-timeout-and-resources}}, managed JVM-based language with compiler-driven CPS transformation (\texttt{suspend} methods)
+\end{itemize}
+
+\pause
+
+We will cover goroutines/koroutines/coroutines in Lecture~\userSpaceThreadingNum.
+
+\pause
+
+Basics you should know:
+\begin{itemize}
+    \item Forced cancellation leads to corruption and should not be used in any language
+    \item Cooperative cancellation:
+    \begin{itemize}
+      \item could be totally user-designed (\texttt{CancellationToken}) with responsiveness trade-off
+      \item could be ''embedded'' into standard library (\texttt{Thread.interrupt}) with complexity trade-off
+      \item requires additional effort to guarantee responsiveness and consistency
+      \item widely adopted but slightly different in modern production languages
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\questiontime{It looks like any language could implement cooperative cancellation in the same manner: use thread-specific \texttt{CancellationToken} with \texttt{.interrupt} and \texttt{.isInterrupted}. 
+
+\newline Does Garbage Collection simplify anything here?}
+
+\subsection{Design decisions}
+\showTOCSub
+
+\begin{frame}{Propagating cancellation}
+
+\texttt{Thread A} started \texttt{Thread B} and \texttt{Thread C}.
+
+\begin{itemize}
+    \item \texttt{Thread A} was interrupted, should \texttt{B} and \texttt{C} be interrupted too? (parent -> child)
+    \item \texttt{Thread C} was interrupted, should \texttt{A} be interrupted too? (child -> parent)
+    \item \texttt{Thread C} was interrupted, should \texttt{B} be interrupted too? (sibling -> sibling)
+\end{itemize}
+
+\pause
+
+It is up to you!
+
+Use structured concurrency techniques and life cycle management (e.g. \texttt{ExecutorService.shutdown}). 
+
+\pause
+
+Kotlin/Go contexts are really well-designed!
 
 \end{frame}
 
+\begin{frame}{Ignoring cancellation}
+
+\begin{itemize}
+    \item Intended policy of task designer
+    \item Task designer was not aware about interruption scenarios
+\end{itemize}
+
+\pause
+
+In general, it is good to write \texttt{interruption-aware} code to make it reusable and modular.
+
+\pause 
+
+However, correct programs may ignore cancellation as soon as it affects performance only, not safety nor progress.
+\end{frame}
+
+\begin{frame}[fragile]{Cancelling cancellation}
+
+\pause 
+
+Do not play mind games!
+
+\pause
+
+\begin{center}
+\includegraphics[width=0.8\textwidth]{./pics/inception.png}
+\end{center}
+\end{frame}
+
+
+\begin{frame}[fragile]{Notification and Interruption ordering}
+
+\begin{minted}{java}
+static Object monitor = new Object();
+void worker1()     { synchronized(monitor) { monitor.wait();   } }
+void worker2()     { synchronized(monitor) { monitor.wait();   } }
+void notifier()    { synchronized(monitor) { monitor.notify(); } }
+void interrupter() { getWorker1().interrupt(); }
+\end{minted}
+
+\pause
+
+Language-level guarantees
+\begin{itemize}
+    \item Delivered notify or delivered interrupt, no ''overriding''
+    \item Delivered interrupt could change \texttt{Thread} interruption status only (no immediate \texttt{InterruptedException})
+\end{itemize}
+
+\pause
+It starts to be really hard!
+
+\pasue
+Your tasks should be always aware of interruption requests. It helps to ensure your code is correct, responsiveness is not main goal here.
+\end{frame}
+
+\subsection{Timeouts}
+\showTOCSub
+
+\begin{frame}{Timeouts}
+
+Many blocking methods have optional \texttt{timeout} parameter:
+\begin{itemize}
+    \item \texttt{Thread.join}
+    \item \texttt{Lock.tryLock}
+    \item \texttt{Condition.await}
+    \item \texttt{Object.wait}
+\end{itemize}
+
+\pause
+
+Timeouts could ''race'' with timings, notifications and interruptions.
+
+\pause
+
+Unlike notifications (\texttt{I am done!/I failed!}) or interruptions (\texttt{I stopped!}), timeouts do not mean that executor stopped to consume resources (CPU, RAM, file handles...).
+
+\pause
+
+Remember, \texttt{Future.get(timeout)} could return one of the following results:
+\begin{itemize}
+    \item \texttt{Success<T>}
+    \item \texttt{Failure<Exception>}
+    \item \texttt{Cancellation<Exception>}
+    \item \texttt{Interruption<Exception>}
+    \item \texttt{Timeout<Exception>}
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Cancellation and interruption}
+\framesubtitle{Conclusion}
+
+\textbf{Cancellation} of not-yet-started tasks
+\begin{itemize}
+  \item Easier to implement via concurrent state machine
+  \item Saves resources if \texttt{cancel} is cheaper than finishing the task  
+\end{itemize}
+
+\textbf{Forced interruption}
+\begin{itemize}
+  \item is evil. Never use it!  
+\end{itemize}
+
+\textbf{Cooperative interruption}
+\begin{itemize}
+  \item May ''lag'', could be ignored by receiver
+  \item Requires language/standard library support for better responsiveness
+  \item Tricky because of many corner cases
+    \begin{itemize}
+        \item Normal completion, Erroneous completion, Cancellation
+        \item Interruption, Notification, Timeout
+        \item Concurrent repeated interruption
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+%\section{Concurrent problem decomposition techniques}
+%\showTOC
+%
+%\begin{frame}[fragile]{Concurrency pitfalls you know so far}
+%
+%How to check your concurrent system against problems?
+%
+%\pause
+%\begin{itemize}
+%    \item Imagine that almost any line of code may be executed 
+%    \begin{itemize}
+%      \item with arbitrary speed
+%      \item by arbitrary utility thread
+%    \end{itemize} 
+%    \item Imagine that almost any blocking method may fail spuriously 
+%    \begin{itemize}
+%        \item timeout
+%        \item interruption
+%        \item notification
+%    \end{itemize} 
+%\end{itemize} 
+%\end{frame}
+
+
+%\begin{frame}[fragile]{Decomposition techniques}
+%
+%Tools to simplify the design:
+%\begin{itemize}
+%    \item Encapsulation (e.g. \texttt{interface Lock})
+%    \item Weakening (e.g. allow reentrancy for locks)
+%    \item Decoupling (e.g. threads and tasks)
+%    \item State machine (e.g. \texttt{Executor is ready/shutdown/terminated})
+%    \item Concurrent programming patterns
+%    \begin{itemize}
+%        \item Producer-consumer
+%        \item Publisher-subscriber
+%        \item Work arbitrage, work dealing, work stealing
+%    \end{itemize}
+%    \item Partitioning:
+%    \begin{itemize}
+%        \item Locking responsibility (data locking, code locking, lock splitting)
+%        \item Access rights (\texttt{ReadWriteLock}, \texttt{Semaphore})
+%        \onslide<2->{\item Data usage (replication, privatization, ownership)}
+%    \end{itemize}
+%    \onslide<2->{\item Batching (e.g. \texttt{N} operations per critical section)}
+%\end{itemize}
+%
+%\pause
+%\pause
+%
+%And many more ideas.
+%\end{frame}
+
+
+%\subsection{Function shipping}
+%\showTOCSub
+%
+%\begin{frame}{Function shipping}
+%
+%Imagine that you have millions of Terabytes of numerical data distributed over millions of computers all over the world with total power exceeding 10 petaFLOPS
+%\begin{itemize}
+    %\item You are looking for aliens\footnote{\tiny\url{https://en.wikipedia.org/wiki/SETI@home}} or trying to cure cancer\footnote{\tiny\url{https://en.wikipedia.org/wiki/Folding@home}}
+%\end{itemize}
+%
+%\pause
+%
+%How to apply complicated computations over distributed data samples?
+%
+%\pause
+%
+%Transfer your algorithm to the data servers!
+%
+%\pause
+%
+%Usual design: data arrive to function (e.g. as a parameter)
+%
+%\pause
+%
+%Function shipping design: function arrive to data (e.g. as a parameter)
+%
+%\pause
+%\begin{itemize}
+%    \item MapReduce framework\footnote<6->{\tiny\url{https://hadoop.apache.org}}
+%    \item Resilient Distributed Dataset framework\footnote<6->{\tiny\url{https://spark.apache.org/}}
+%    \pause
+%    \item OS signal handlers could be used to perform function shipping to particular threads
+%\end{itemize}
+%\end{frame}
+
+%\subsection{Designated thread}
+%\showTOCSub
+%
+%\begin{frame}{Designated thread}
+%
+%\texttt{N} philosophers have serious problems with eating together and not starving to death.
+%
+%\pause
+%
+%They ask external authority (a.k.a. \texttt{waiter}) to solve all the serving problems.
+%
+%\pause
+%\begin{itemize}
+%    \item Requests for operations (\texttt{I need forkA and forkB}) passed to designated thread
+%    \item Operations (\texttt{grab forks, serve dish}) done by single designated thread
+%    \item Confirmation response (\texttt{here are your forks, dish and pasta}) returned asynchronously
+%\end{itemize}
+%
+%\pause
+%\textbf{Optional homework:} prepare list of advantages and disadvantages of this design before the exam.
+%
+%\end{frame}
+
+
+%\subsection{Partitioning threads}
+%\showTOCSub
+%
+%\begin{frame}[fragile]{Efficient counter: case study}
+%
+%Thread-safe counter
+%\begin{minted}{java}
+%public class Counter {
+%    private long cnt;
+%    public Counter(long initial) { ... }
+%    public void increment() { ... }
+%    public long get() { ... }
+%}
+%\end{minted}
+%
+%\begin{itemize}
+%    \item Concurrent \texttt{increment}
+%    \item Concurrent \texttt{get}
+%    \item ''Consistency'' of reads and updates
+%\end{itemize}
+%\end{frame}
+%
+%\begin{frame}[fragile]{Locked counter}
+%
+%\begin{minted}{java}
+%public class LockedCounter {
+%    private long cnt;
+%    public LockedCounter(long initial) { this.cnt = initial; }
+%    public synchronized void increment() { cnt++; }
+%    public synchronized long get() { return cnt; }
+%}
+%\end{minted}
+%
+%Advantages
+%\begin{itemize}
+%    \item Easy to implement and debug
+%\end{itemize}
+%
+%Disadvantages
+%\begin{itemize}
+%    \item Bad scalability 
+%\end{itemize}
+%\end{frame}
+%
+%\questiontime{\texttt{LockedCounter} uses \texttt{synchronized} modifier on public methods. Please, remind, why could it be a bad idea?}
+%
+%
+%\begin{frame}[fragile]{Partitioning: threads}
+%
+%\begin{minted}{java}
+%private long cnt; 
+%private final ReadWriteLock rw = ...;
+%public Counter(long initial) { this.cnt = initial; }
+%public void increment() { 
+%  rw.writeLock().lock(); try { cnt++; } finally { rw.writeLock().unlock(); } 
+%}
+%public long get() { 
+%  rw.readLock().lock(); try { return cnt; } finally { rw.readLock().unlock(); } 
+%}
+%\end{minted}
+%
+%\pause
+%
+%\begin{itemize}
+%    \item Easy to implement
+%    \item Great scalability for read-mostly scenarios
+%    \item Bad scalability for write-intensive scenarios
+%\end{itemize}
+%\end{frame}
+%
+%\subsection{Partitioning data}
+%\showTOCSub
+%
+%\begin{frame}[fragile]{Partitioning data}
+%\begin{minted}{java}
+%private final LockedCounter c1, c2;
+%public Counter(long initial) { c1 = new LockedCounter(initial); 
+%                               c2 = new LockedCounter(0); }
+%public void increment() { 
+%  var c = (Thread.currentThread().hashCode() % 2 == 0) ? c1 : c2;
+%  c.increment();
+%}
+%public long get() { 
+%  synchronized(c1) { synchronized(c2) { return c1.get() + c2.get(); }}
+%}
+%\end{minted}
+%
+%\pause
+%
+%\begin{itemize}
+%    \item Better scalability for write-mostly scenarios
+%    \item Bad scalability for read-intensive scenarios
+%    \item Unknown optimal level of partitioning (\texttt{c1, c2, c3 ... cN})
+%\end{itemize}
+%\end{frame}
+%
+%\subsection{Privatization}
+%\showTOCSub
+%
+%
+%\begin{frame}[fragile]{Privatization}
+%\begin{minted}{java}
+%public void increment() { 
+%  if (currentThreadOwnsCounter()) { cnt++; } 
+%  else { incrementSlowPath(); }
+%}
+%public long get() { 
+%  if (currentThreadOwnsCounter()) { return cnt; } 
+%  else { return getSlowPath(); }
+%}
+%\end{minted}
+%
+%\begin{itemize}
+%    \item Close to optimal for uncontended scenario
+%    \item How to pass ''ownership'' from one thread to another?
+%\end{itemize}
+%\end{frame}
+%
+%\begin{frame}[fragile]{Privatization + batching}
+%\begin{minted}{java}
+%private long ops;
+%private void checkOwnershipTransfer() { 
+%  if (curThreadIsOwner() && ((++ops) > 1_000)) { ops=0; tryPassOwnership(); } 
+%}
+%public void increment() { 
+%  checkOwnershipTransfer();
+%  if (curThreadIsOwner()) { cnt++; } else { incrementSlowPath(); }
+%}
+%public long get() { 
+%  checkOwnershipTransfer();
+%  if (curThreadIsOwner()) { return cnt; } else { return getSlowPath(); }
+%}
+%\end{minted}
+%
+%\begin{itemize}
+%    \item Close to optimal for uncontended scenarios with large batch size
+%    \item Non-owners could wait for arbitrary long time
+%\end{itemize}
+%\end{frame}
+%
+%\subsection{Replication}
+%\showTOCSub
+%
+%\begin{frame}[t,fragile]{Replication + batching}
+%
+%ThreadLocal\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/ThreadLocal.html}}
+%\begin{minted}{java}
+%static final ThreadLocal<Long> privateCounter = new ThreadLocal<Long>();
+%static final LockedCounter globalCounter = new LockedCounter();
+%public long get() {  return privateCounter.get(); }
+%public void increment() {
+%  privateCounter.set(privateCounter.get() + 1); 
+%  ops++;
+%  if (ops > 1_000) { 
+%    globalCounter.add(ops); 
+%    privateCounter.set(globalCounter.get()); 
+%    ops = 0; 
+%  }
+%}
+%\end{minted}
+%\end{frame}
+%
+%
+%\begin{frame}[t,fragile,noframenumbering]{Replication + batching}
+%
+%\begin{minted}{java}
+%public long get() {  return privateCounter.get(); }
+%public void increment() {
+%  privateCounter.set(privateCounter.get() + 1); ops++;
+%  if (ops > 1_000) { 
+%    globalCounter.add(ops); 
+%    privateCounter.set(globalCounter.get()); 
+%    ops = 0; 
+%  }
+%}
+%\end{minted}
+%
+%\begin{itemize}
+%    \item Most operations do not require synchronization
+%    \item In-thread \texttt{get/increment} are consistent
+%    \item Cross-thread operations are partially inconsistent 
+%    \begin{itemize}
+%      \item global state ''lags'' but monotonically grows
+%      \item thread-private states ''lag'' but monotonically grow
+%    \end{itemize}
+%\end{itemize}
+%\end{frame}
+
+%\subsection{Ownership}
+%\showTOCSub
+%
+%\begin{frame}{Ownership}
+%
+%\begin{itemize}
+%    \item Exclusive data ownership
+%    \begin{itemize}
+%        \item only owner may access data for read/write        
+%    \end{itemize}
+%
+%    \item Read-only data ownership
+%    \begin{itemize}
+%        \item several owners, allowed only to read data
+%    \end{itemize}
+%
+%    \item Exclusive code ownership
+%    \begin{itemize}
+%        \item only owner may execute code fragment
+%    \end{itemize}
+%
+%    \item Temporary ownership
+%    \begin{itemize}
+%        \item owner may change, but it is always an atomic transaction        
+%    \end{itemize}
+%
+%    \item Thread-local/thread-private data
+%    \begin{itemize}
+%        \item always owned by the same thread
+%    \end{itemize}    
+%\end{itemize}
+%\end{frame}
+
+%\questiontime{Provide an example of thread-private data that exists in any programming language}
+%
+%\begin{frame}{Partitioning types and flavours}
+%
+%You could find partitioning almost in any pattern:
+%\begin{itemize}
+%    \item Thread access (code locking)
+%    \item Lock instances (lock splitting)
+%    \item Place of code execution (function shipping)
+%    \item Responsibility of code execution (designated thread)
+%    \item Spatially partition data ownership (data locking)
+%    \item Temporal partitioning of data access (privatization, mutex-guarded ownership)
+%    \item Duplicate data (replication)
+%    \item Number of operations performed by thread locally (batching)
+%\end{itemize}
+%
+%\pause
+%It is useful to use ownership (thread confinement) variations:
+%\begin{itemize}
+%    \item Temporal thread confinement (critical section)
+%    \item Automatic thread confinement (local variables)
+%    \item User-intended thread confinement (\texttt{ThreadLocal})
+%    \item Group-level thread confinement (\texttt{Semaphore}, \texttt{ReadWriteLock})
+%\end{itemize}
+%\end{frame}
+
+\section{Summary}
+
+\begin{frame}{Summary}
+
+\begin{itemize}
+    \item Cancellation of concurrently running tasks is useful to save computation resources
+    \item Proper interruption requires cooperation
+    \item There exist language-independent interruption designs and low-level language-specific ones
+    \item Task interruption could be built on top of thread interruption
+    \item Timeouts could be treated as a variation of ''self-interruption''
+    \item Developing safe and efficient concurrent systems is hard, consider using concurrent patterns    
+\end{itemize}
+\end{frame}
 
 \begin{frame}{Summary: homework}
-
-Task \taskJCStress: JCStress basics.
-
+    \texttt{Lecture 5, Tasks 5.*:} {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block1}}
 \end{frame}
-
-
 
 \end{document}
