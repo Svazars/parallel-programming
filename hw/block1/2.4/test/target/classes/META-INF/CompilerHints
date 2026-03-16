@@ -1,0 +1,16 @@
+dontinline,*.*_all_jmhStub
+dontinline,*.*_avgt_jmhStub
+dontinline,*.*_sample_jmhStub
+dontinline,*.*_ss_jmhStub
+dontinline,*.*_thrpt_jmhStub
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.inc1
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.inc2
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.inc4
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.incMax
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.incMaxMax
+inline,org/nsu/syspro/parprog/counters/benches/CountersBenchmark.setup
+inline,org/nsu/syspro/parprog/counters/benches/NoContentionBaseline.thread_private_plain_inc1
+inline,org/nsu/syspro/parprog/counters/benches/NoContentionBaseline.thread_private_plain_inc2
+inline,org/nsu/syspro/parprog/counters/benches/NoContentionBaseline.thread_private_plain_inc4
+inline,org/nsu/syspro/parprog/counters/benches/NoContentionBaseline.thread_private_plain_incmax
+inline,org/nsu/syspro/parprog/counters/benches/NoContentionBaseline.thread_private_plain_incmaxmax
