@@ -37,8 +37,20 @@ class B extends Thread {
 Assume `main` thread `join`ed both thread `A` and thread `B`. Use interleaving model for formalization of possible and impossible execution traces. For every question below provide either concurrent execution trace (in the form `A.1->A.2->B.1 ...`) or proof of impossibility:
 
 - Could `main` thread observe `x == 1, r_y == 0, r_z == 0`?
+
+Yes
+A.1-B.1-A.2-B.2-A.3-B.3-A.4-B.4-A.5-B.5
+
 - Could `main` thread observe `x == 2, r_y == 0, r_z == 1`?
+
+yes
+A.1-B.1-A.2-B.2-A.3-B.3-A.4-A.5-B.4-B.5
+
 - Could `main` thread observe `x == 1, r_y == 0, r_z == 1`?
+
+no
+rz = 1 requires B.4 to read x = 1
+then B.5 runs too hence no operation can write 1 again because A.5 can only write 1 and must occur before B.4 to produce that 1 for B.4
 
 **Hint.** Proof of impossibility could be structured in the following way:
 - assume there exists concurrent execution trace where `main` thread observes `var == N`
