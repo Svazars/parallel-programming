@@ -1,0 +1,9 @@
+target=Task13
+target.args=0
+
+cg.enumerate_random = true
+
+classpath=/workspace
+sourcepath=/workspace
+
+report.console.property_violation=error,snapshot,trace

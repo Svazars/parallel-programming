@@ -1,0 +1,691 @@
+% tikz common
+\newcommand{\uedge}[2]{(#1) edge node {} (#2)}
+\newcommand{\cedge}[3]{(#1) edge[#3, line width=1mm] node {} (#2)}
+\newcommand{\cedgel}[3]{(#1) edge[#3, line width=0.5mm] node {} (#2)}
+\newcommand{\nodesize}{1cm}
+
+\newenvironment{spaceexp}
+    {    
+    \begin{tikzpicture}[
+        every text node part/.style={align=center},
+        scale=1, every node/.style={scale=0.5},
+        node distance=2.5cm,
+        ->,>=stealth',
+        global/.style        = {circle,    fill=black, draw,  minimum size=\nodesize]}, 
+        local/.style         = {rectangle, fill=white, draw,  minimum size=\nodesize], font=\ttfamily},
+        active/.style        = {rectangle, fill=white, draw, double,  minimum size=\nodesize], font=\ttfamily},
+        other local/.style   = {circle,    fill=grey,  draw,  minimum size=\nodesize]},
+        invisible/.style     = {circle,                       minimum size=\nodesize], font=\ttfamily}
+    ]           
+    } 
+    {    
+    \end{tikzpicture}
+    }
+
+
+\newcommand{\one}{T1: int copy\_x = x;}
+\newcommand{\two}{T2: int copy\_x = x;}
+\newcommand{\three}{T1: x++;}
+\newcommand{\four}{T2: x++;}
+
+\newcommand{\filler}{{\color{white} f}}
+\newcommand{\headerName}{State space exploration}
+
+
+\begin{frame}[fragile]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[invisible, left of=l1m]       (l1l)            {};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[invisible, below of=l1m]        (l2m)             {\filler \\ \filler};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[invisible, left of=l3m]         (l3l)            {\filler \\ \filler \\ \filler};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[invisible, left of=l4m]         (l4lr)           {  \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{2}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[active, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[invisible, below of=l1m]        (l2m)             {\filler \\ \filler};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[invisible, left of=l3m]         (l3l)            {\filler \\ \filler \\ \filler};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[invisible, left of=l4m]         (l4lr)           {  \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{2}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[active, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[invisible, left of=l3m]         (l3l)            {\filler \\ \filler \\ \filler};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[invisible, left of=l4m]         (l4lr)           {  \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{2}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{3}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[active, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[invisible, left of=l4m]         (l4lr)           {  \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{2}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{3}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[active, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{3}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{2}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[active, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[invisible, right of=l3m]        (l3r)            {\filler \\ \filler \\ \filler};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{2}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{2}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[active, right of=l3m]        (l3r)            {\one \\ \two \\ \four};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[invisible, right of=l4m]         (l4rl)          { \filler \\ \filler \\ \filler \\ \filler };
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ \cedgel{l2m}{l3r}{green}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{3}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+    linebackgroundcolor={%
+      \btLstHL<1>{3}% on slide 1, highlight lines 2
+    }
+]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[local, right of=l3m]        (l3r)            {\one \\ \two \\ \four};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[active, right of=l4m]         (l4rl)          { \one \\ \two \\ \four \\ \three};
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ \cedgel{l2m}{l3r}{green}
+  \cedgel{l3r}{l4rl}{yellow}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{3}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[active]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[invisible, right of=l1m]      (l1r)            {};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[local, right of=l3m]        (l3r)            {\one \\ \two \\ \four};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[local, right of=l4m]         (l4rl)          { \one \\ \two \\ \four \\ \three};
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ \cedgel{l2m}{l3r}{green}
+  \cedgel{l3r}{l4rl}{yellow}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[active, right of=l1m]      (l1r)               {\two};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[local, right of=l3m]        (l3r)            {\one \\ \two \\ \four};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[local, right of=l4m]         (l4rl)          { \one \\ \two \\ \four \\ \three};
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ \cedgel{l2m}{l3r}{green}
+ \cedgel{l3r}{l4rl}{yellow}
+ \cedgel{s}{l1r}{green}
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em,
+linebackgroundcolor={%
+      \btLstHLG<1>{2}% on slide 1, highlight lines 2
+    }
+]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+\begin{frame}[fragile, noframenumbering]{\headerName}
+
+\begin{tabular}{p{2.5cm}p{4cm}p{3cm}}
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+    Thread 1 
+int copy_x = x;
+x++;
+\end{lstlisting}
+          &
+
+\begin{spaceexp}
+\node[invisible]              (s)                 {$start$};
+
+\node[invisible, below of=s]        (l1m)            {};
+\node[local, left of=l1m]       (l1l)                {\one};
+\node[local, right of=l1m]      (l1r)               {\two};
+
+\node[local, below of=l1m]        (l2m)             {\one \\ \two};
+\node[invisible, left of=l2m]         (l2lr)            {};
+\node[invisible, left of=l2lr]        (l2ll)            {};
+\node[invisible, right of=l2m]        (l2rl)            {};
+\node[invisible, right of=l2rl]       (l2rr)            {};
+
+\node[invisible, below of=l2m]        (l3m)            {};
+\node[local, left of=l3m]         (l3l)            {\one \\ \two \\ \three};
+\node[local, right of=l3m]        (l3r)            {\one \\ \two \\ \four};
+
+\node[invisible, below of=l3m]        (l4m)            {};
+\node[local, left of=l4m]         (l4lr)           {  \one \\ \two \\ \three \\ \four };
+\node[invisible, left of=l4lr]        (l4ll)           {};
+
+\node[local, right of=l4m]         (l4rl)          { \one \\ \two \\ \four \\ \three};
+\node[invisible, right of=l4rl]        (l4rr)          {};
+
+\path
+ \cedgel{s}{l1l}{yellow}
+ \cedgel{l1l}{l2m}{green}
+ \cedgel{l2m}{l3l}{yellow}
+ \cedgel{l3l}{l4lr}{green}
+ \cedgel{l2m}{l3r}{green}
+ \cedgel{l3r}{l4rl}{yellow}
+ \cedgel{s}{l1r}{green}
+
+
+ \cedgel{s}{l1r}{green}
+
+ \cedgel{l1r}{l2rr}{green}
+ \cedgel{l1r}{l2rl}{yellow}
+ \cedgel{l1l}{l2ll}{yellow}
+
+ \cedgel{l3l}{l4ll}{yellow}
+ \cedgel{l3r}{l4rr}{green}
+
+
+ ;
+\end{spaceexp}
+
+          &          
+\begin{lstlisting}[linebackgroundwidth = 12 em]
+      Thread 2 
+ int copy_x = x;
+ x++;
+\end{lstlisting}
+\end{tabular}
+
+\end{frame}
+

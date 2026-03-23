@@ -1,0 +1,7 @@
+target=Task12
+target.args=0
+
+classpath=/workspace
+sourcepath=/workspace
+
+report.console.property_violation=error,snapshot,trace

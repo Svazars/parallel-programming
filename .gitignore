@@ -3,3 +3,5 @@ slides/
 *.iml
 docs/
 out/
+build/
+.gradle/

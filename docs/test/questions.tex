@@ -31,9 +31,11 @@
 \date{}
 
 
-\newcommand{\threadSafetySimple}{Неформальный подход к потоковой безопасности (thread-safety), примеры. Ключевые свойства многопоточного алгоритма: безопасность/корректность (safety), живность (liveness), производительность.}
+\newcommand{\threadSafetySimple}{Неформальный подход к потоковой безопасности (thread-safety), примеры.}
 
-\newcommand{\mutexBasics}{Взаимное исключение. Критическая секция (mutex). Admission policy. Реентерабельность (reentrancy), честность (fairness), голодание (starvation).}
+\newcommand{\mutexBasics}{Взаимное исключение. Критическая секция (mutex). Алгоритм взаимного исключения для двух потоков, основанный на флагах. Доказательство свойства mutual exclusion. Доказательство свойства deadlock freedom. Голодание (starvation).
+Реентерабельность (reentrancy). Admission policy, связь с честностью (fairness), наблюдаемым временем отклика (latency) и производительностью (throughput).}
+
 \newcommand{\condVarBasics}{Передача сигнала от одного потока другому (signalling). Условная переменная (condition variable).}
 
 \newcommand{\mutexDesign}{Блокировка кода (code locking), блокировка данных (data locking). Расщепление мьютексов (lock splitting). Упорядочивание критических секций для предотвращения состояния тупика (lock ordering, deadlock prevention).}
@@ -53,8 +55,6 @@
 
 
 
-
-
 \begin{document}
 
 \section*{Вопросы по курсу "Параллельное программирование"}
@@ -67,7 +67,7 @@
 	
 	\item Конкурентность (concurrency) и параллелизм (parallelism). Системы разделения времени (time-sharing), многозадачность (multitasking). Процессы и потоки. Вытесняющая многозадачность и кооперативная многозадачность. Планировщик ОС: квант планирования, смена контекста, метрики эффективности планирования, стратегии планирования, алгоритм round-robin. Задачи, легко поддающиеся параллелизации (embarrassingly parallel problems). Закон Амдала.
 
-	\item Недетерминизм многопоточного исполнения, состояние гонки (race condition), гонка данных (data race). Word tearing. Видимость (visibility). Wait-for graph. Состояние тупика (deadlock). Инверсия приоритетов.
+	\item Способы выделения вычислительных ресурсов для задач (threading models): 1:1, N:1, N:M. Модель исполнения, основанная на переборе возможных смен контекста на одном исполнителе (interleaving model). Трасса исполнения многопоточной программы (concurrent execution trace). Недетерминизм многопоточного исполнения, состояние гонки (race condition), гонка данных (data race). Видимость (visibility). Wait-for graph. Состояние тупика (deadlock). Инверсия приоритетов.
 \end{enumerate}
 
 \section{Лекция~\basicNum: \basicTopic}
@@ -78,19 +78,43 @@
 	
 	\item \threadSafetySimple 
 
-	\mutexBasics 
-
-	\mutexDesign	
+	Взаимное исключение. Критическая секция (mutex). Алгоритм взаимного исключения для двух потоков, основанный на флагах: доказательство свойства mutual exclusion, доказательство свойства deadlock freedom. Голодание (starvation). Реентерабельность (reentrancy). Admission policy, связь с честностью (fairness), наблюдаемым временем отклика (latency) и производительностью (throughput).
 	
-	Проблема lock convoy. Задача об обедающих философах (dining philosophers problem).
+	Задача об обедающих философах (dining philosophers problem).
 
 	\item \threadSafetySimple 
 
-	\condVarBasics
+	Взаимное исключение. Критическая секция (mutex). Голодание (starvation). Реентерабельность (reentrancy). Admission policy, связь с честностью (fairness), наблюдаемым временем отклика (latency) и производительностью (throughput). 
 
+	Блокировка кода (code locking), блокировка данных (data locking). Расщепление мьютексов (lock splitting). Упорядочивание критических секций для предотвращения состояния тупика (lock ordering, deadlock prevention).	
+	
+	Задача об обедающих философах (dining philosophers problem).
+
+\end{enumerate}
+
+
+\section{Лекция~\basicTwoNum: \basicTwoTopic}
+
+Ключевые понятия: \basicTwoKey
+
+\begin{enumerate}[\thesection .1]
+
+	\item \threadSafetySimple 
+
+	Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies).
+	Условная переменная (condition variable).
+
+	\textbf{Thread pools}: \texttt{Runnable}, \texttt{ThreadFactory}, \texttt{Executor}, \texttt{Callable}, \texttt{Future}, \texttt{ExecutorService}, \texttt{fixedThreadPool}, \texttt{singleThreadExecutor}, \texttt{cachedThreadPool}.
+
+	Проблемы, характерные для пулов потоков: взаимные блокировки, утечки памяти, голодание, искажение владения (ownership, thread-local).
+
+	\item \threadSafetySimple 
+
+	Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies).
+	Условная переменная (condition variable).
 
 	Пример API: \texttt{wait/notify/notifyAll}. Пример API: \texttt{await/signal/signalAll}.
-	Проблема потерянного сигнала (lost signal), устаревания условия (predicate invalidation), внезапного пробуждения (spurious wakeup). Честность (fairness). Голодание (starvation).
+	Проблема потерянного сигнала (lost signal), внезапного пробуждения (spurious wakeup), устаревания условия (predicate invalidation). Честность (fairness) и голодание (starvation). Особенности использования нескольких условных переменных, ассоциированных с одним и тем же мьютексом, пример очереди с ограниченной вместимостью (bounded buffer).
 
 \end{enumerate}
 
@@ -100,60 +124,27 @@
 Ключевые понятия: \syncPrimitivesKey
 
 \begin{enumerate}[\thesection .1]
-	\item \mutexBasics \condVarBasics
+	\item Взаимное исключение. Критическая секция (mutex). Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies). Условная переменная (condition variable).
 
-	\textbf{Мониторы в языке Java} (built-in monitor). Описание API. Ключевое слово \texttt{synchronized}. Admission policy. Реентерабельность (reentrancy), честность (fairness), владение (ownership). 
-
-	\mutexDesign
-
-	\commonProblems	
-
-	\item \mutexBasics 
-
-	\condVarBasics
-
-	\textbf{CountDownLatch}.	
-
-	\commonProblems		
-
-	\item \mutexBasics 
-
-	\condVarBasics
-
-	\textbf{CyclicBarrier}.
-
-	\commonProblems		
-
-	\item \mutexBasics 
-
-	\condVarBasics
-
-	\textbf{Semaphore}.
-
-	\commonProblems		
+	\textbf{Мониторы в языке Java} (built-in monitor). Описание API. Ключевое слово \texttt{synchronized}. Admission policy. Реентерабельность (reentrancy), честность (fairness), владение (ownership). Пример CompletionService. Проблема грохочущего стада (thundering herd). Оптимизация wait morphing.
 	
-	\item \mutexBasics 
+	\item Взаимное исключение. Критическая секция (mutex). Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies). Условная переменная (condition variable).
 
-	\condVarBasics
+	\textbf{CountDownLatch}. На примере этой структуры данных проиллюстрируйте следующие многопоточные дефекты: проблема потерянного сигнала (lost signal), устаревание условия (predicate invalidation), внезапное пробуждение (spurious wakeup), грохочущее стадо (thundering herd), инверсия приоритета (priority inversion), голодание (starvation), состояние тупика (deadlock). Возможно вам понадобится разъяснить отсутствие перечисленных проблем в структуре данных. 
 
-	\textbf{ReadWriteLock}. Предпочтение читающего или пишущего потока. Усиление (read-to-write promotion) и ослабление (write-to-read downgrade).  
+	\item Взаимное исключение. Критическая секция (mutex). Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies). Условная переменная (condition variable).
+ 
+	\textbf{Semaphore}. На примере этой структуры данных проиллюстрируйте следующие многопоточные дефекты: проблема потерянного сигнала (lost signal), устаревание условия (predicate invalidation), внезапное пробуждение (spurious wakeup), грохочущее стадо (thundering herd), инверсия приоритета (priority inversion), голодание (starvation),  состояние тупика (deadlock). Возможно вам понадобится разъяснить отсутствие перечисленных проблем в структуре данных. 
 
-	\commonProblems		
-
-	\item \mutexBasics 
-
-	\condVarBasics
-
-	\textbf{Thread pools}: \texttt{ThreadFactory}, \texttt{Executor}, \texttt{Future}, \texttt{ExecutorService}, \texttt{fixedThreadPool}, \texttt{singleThreadExecutor}, \texttt{cachedThreadPool}.
-
-	Проблемы, характерные для пулов потоков: взаимные блокировки, утечки памяти, голодание, искажение владения (ownership, thread-local).
 	
-	\item \mutexBasics 
+	\item Взаимное исключение. Критическая секция (mutex). Передача сигнала от одного потока другому (signalling). Активное ожидание с переключением контекста (backoff policies). Голодание (starvation). Реентерабельность (reentrancy). Admission policy, связь с честностью (fairness), наблюдаемым временем отклика (latency) и производительностью (throughput).
 
-	\condVarBasics
+	\textbf{ReadWriteLock}. Предпочтение читающего или пишущего потока. Усиление (read-to-write promotion) и ослабление (write-to-read downgrade). На примере этой структуры данных проиллюстрируйте следующие многопоточные дефекты: проблема потерянного сигнала (lost signal), устаревание условия (predicate invalidation), внезапное пробуждение (spurious wakeup), грохочущее стадо (thundering herd), инверсия приоритета (priority inversion), голодание (starvation),  состояние тупика (deadlock). Возможно вам понадобится разъяснить отсутствие перечисленных проблем в структуре данных. 
 
-	\textbf{Шаблон ''производитель-потребитель''} (producer-consumer). Балансировка нагрузки (load balancing). Проблемы балансировки нагрузки для push-based протоколов.	
-	Шаблоны разделения работы: work arbitrage, work dealing, work stealing. Fork-join модель, её преимущества и недостатки.
+	\item Потоково-локальные (потоково-специфичные, thread-local) данные. Паттерн ''репликация'' (replication), паттерн ''снимок состояния'' (snapshotting). Алгоритм распределенного счетчика, ориентированный на масштабируемость операции \texttt{increment}.
+	
+	%\textbf{Шаблон ''производитель-потребитель''} (producer-consumer). Балансировка нагрузки (load balancing). Проблемы балансировки нагрузки для push-based протоколов.	
+%	Шаблоны разделения работы: work arbitrage, work dealing, work stealing. Fork-join модель, её преимущества и недостатки.
 
 \end{enumerate}
 
@@ -163,39 +154,43 @@
 Ключевые понятия: \patternsKey
 
 \begin{enumerate}[\thesection .1]
-	\item Отмена задач (cancellation, interruption).
-	Прерывание задач (task cancellation) и прерывание потоков (thread cancellation).
-	Односторонняя отмена задач (forced cancellation). 
-	Кооперативная отмена задач с помощью cancellation token.
-	Кооперативная отмена задач с помощью cancellation points.
-	Прерываемые (interruptible) и непрерываемые (uninterruptible) методы.
-	Политики распространения отмены задач. 
-	Упорядочение асинхронных событий: отмена, сигнал условной переменной, срабатывания таймера (interruption, notification, timeout ordering).	
 
-	\item Техники декомпозиции многопоточных программ. Конечный автомат. Перенос функций (function shipping). Выделенный поток (designated thread).
-	Разбиение потоков на группы. Разбиение данных на кластеры. Приватизация данных (privatization). Репликация (replication).
-	Группировка однотипных событий (batching). Владение (ownership) и привязка к потоку исполнения (thread confinement).
+	\item Отмена задач (cancellation).
+
+	\textbf{Thread pools}: \texttt{Runnable}, \texttt{ThreadFactory}, \texttt{Executor}, \texttt{Callable}, \texttt{Future}, \texttt{ExecutorService}, \texttt{fixedThreadPool}, \texttt{singleThreadExecutor}, \texttt{cachedThreadPool}.
+
+	Техники декомпозиции многопоточных программ: конечный автомат для интерфейса \texttt{Future}, отмена задач (cancellation of not-yet-processed tasks). Односторонняя отмена задач (forced cancellation), преимущества и недостатки. Кооперативная отмена задач с помощью cancellation token.
+
+	\item Прерывание задач (interruption). 	
+	Прерывание потоков (thread interruption) с помощью архитектуры thread-specific cancellation token. Особенности поддержки такого решения на уровне языка программирования и его стандартной библиотеки. Прерываемые (interruptible) и непрерываемые (uninterruptible) методы. Прерывание задач (task interruption). Политики распространения запроса на прерывания.
+	Упорядочение асинхронных событий: прерывание (interrupt), сигнал условной переменной (signal/notify), срабатывания таймера (timeout).
+
 \end{enumerate}
 
 
-\section{Лекция~\extraBasicsNum: \extraBasicsTopic}
+\section{Лекция~\reliabilityNum: \reliabilityTopic}
 
-Ключевые понятия: \extraBasicsKey
+Ключевые понятия: \reliabilityKey
 
 \begin{enumerate}[\thesection .1]
 
 	\item Документирование многопоточных инвариантов. Проверка инвариантов потоковой безопасности для различных структур данных.
 	Assertions. Препятствия для написания надежных многопоточных программ.	 
 
-	\item Тестирование многопоточных программ. Юнит-тестирование, стресс-тестирование. Построение и анализ трасс исполнения.
-	Проектирование тестов, исполняемых в многопоточной среде. Анализ вероятности негативного сценария, оценка требуемых вычислительных ресурсов для тестирования.  
+	Тестирование многопоточных программ. Юнит-тестирование, стресс-тестирование. Анализ вероятности негативного сценария, оценка требуемых вычислительных ресурсов для тестирования.  
 	
-	\item Инструменты анализа многопоточных программ. Статический анализ и поиск дефектов. Проверки времени исполнения.
-	Мониторинг и observability API. Контроль порядка исполнения конкурентной программы (scheduling control): с помощью тестов (mocking, inheritance), с помощью языковых средств (aspects, bytecode transformation),
-	с помощью операционной системы (chaos mode execution). 
+	\item Документирование многопоточных инвариантов. Проверка инвариантов потоковой безопасности для различных структур данных.
+	Assertions. Препятствия для написания надежных многопоточных программ.	 
+
+	Инструменты автоматического анализа многопоточных программ. Статический анализ и поиск дефектов. Проверки времени исполнения.
+	Контроль порядка исполнения конкурентной программы (scheduling control): с помощью тестов (mocking, inheritance), с помощью метаязыковых средств (aspects, bytecode transformation), с помощью операционной системы (affinity control).
+
+	\item \textbf{Раздел про проверку моделей (model checking) не выносится на экзамен 2026 года.}
 
 \end{enumerate}
 
+
+\newpage
 
 \section{Лекция~\foundationsNum: \foundationsTopic}
 
