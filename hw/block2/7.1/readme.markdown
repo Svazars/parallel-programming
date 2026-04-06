@@ -6,7 +6,7 @@ Assume we have a (possibly infinite) set of events `x1, x2, x3 ...`. Those event
 
 **Side note**: usually partial orders defined via binary relation denoted as `<` but here we use symbol `->`.
 
-Two different intervals `X = (x1, x2)` and `Y = (y1, y2)` are **disjoint** iff `x2 -> y1` or `y2 -> x1`.
+Two intervals `X = (x1, x2)` and `Y = (y1, y2)` are **disjoint** iff `x2 -> y1` or `y2 -> x1`.
 If `X` and `Y` are not disjoint then we say they are **overlapping** intervals.
 
 If `X` and `Y` are disjoint and `x2 -> y1` then we say that `X` **precede** `Y` writing `X -> Y`.
