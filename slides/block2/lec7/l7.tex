@@ -1,8 +1,10 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
-\title[]{Lecture \foundationsPlusNum: \foundationsPlusTopic}
-\subtitle[]{\foundationsPlusKey}
+\newcommand{\thisLectureNum}{\foundationsNum}
+
+\title[]{Lecture \thisLectureNum: \foundationsTopic}
+\subtitle[]{\foundationsKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
 
 \date{}
@@ -11,44 +13,66 @@
 
 \begin{frame}
   \titlepage
-  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l7.pdf}
+  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l\thisLectureNum.pdf}
 \end{frame}
-
 
 \begin{frame}{In previous episodes}
 
-"Alphabet" \ of concurrent execution
+Concurrency is complicated due to:
 \begin{itemize}
-  \item Timeline, Event, Interval, Precedence
-\end{itemize}
-
-Simple "words" \ related to mutual exclusion:
-\begin{itemize}
-  \item Mutual exclusion, Deadlock-freedom, Starvation-freedom
-\end{itemize}
-
-"Sentences" \ that describe proper mutual exclusion primitive:
-\begin{itemize}
-  \item Peterson`s algorithm
-  \item FilterLock
-  \item Lower bounds on the number of locations
-\end{itemize}
-
-"Grammar rules" \ for particular concurrent objects:
-\begin{itemize}
-  \item Sequential object, sequential specification
-  \item Concurrent object, consistency
-  \item Linearizability, linearization points
-  \item Non-linearizable executions
+  \item Independence of agents 
+  \begin{itemize}
+    \item combinatorial explosion of possible executions
+  \end{itemize}
+  \item Uncontrollable execution speed of agents 
+  \begin{itemize}
+    \item spurious failures
+  \end{itemize}  
+  \item Uncertainty with definition of consistency 
+  \begin{itemize}
+    \item concurrent invariants
+    \item visibility
+    \item data race
+    \item atomicity
+  \end{itemize}  
 \end{itemize}
 
 \pause
-We were focusing on \textbf{correctness}. Today we will focus on \textbf{progress}.
+
+Is it purely engineering issue or we have encountered some fundamental problem?
 
 \end{frame}
 
 
-\begin{frame}{Supplementary materials}
+\begin{frame}[t]{Be patient}
+
+Reminder: you are studying Turing Machines or Finite-State Machines in order to
+\begin{itemize}
+  \item get a compact and fully formalized description of some "computing device"
+  \item understand theoretical limitations of an object (Halting Problem, Pumping Lemma)
+\end{itemize}
+
+\pause
+
+Observations:
+\begin{itemize}
+  \pause \item it takes \textbf{several mathematically-intensive sessions} to go from the definition to really interesting theorems
+  \pause \item concurrency is more ''inherently-complicated'' so it takes \textbf{even more time} to rigorously prove non-trivial properties
+\end{itemize}
+
+\pause
+
+We will skip or simplify some steps.
+
+\pause
+There still will be a lot of technical (yet mathematically heavy) parts. 
+
+\pause
+At least, you will understand why proving concurrent algorithms could be really hard. 
+
+\end{frame}
+
+\begin{frame}[t]{Supplementary materials}
 
 \begin{itemize}
   \item Chapters 1-5 in "The Art of Multiprocessor Programming" 
@@ -57,10 +81,42 @@ We were focusing on \textbf{correctness}. Today we will focus on \textbf{progres
 
 Our course briefly introduces some important theoretical concepts, for better understanding consider looking through
 \begin{itemize}
+  \item \texttt{chapter\_02.ppt}
   \item \texttt{chapter\_03.ppt}  
-  \item \texttt{chapter\_04.ppt}
-  \item \texttt{chapter\_05.ppt}
 \end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Theoretical mode enabled}
+
+\textbf{Important:} in Lecture~\foundationsNum \ (today) and Lecture~\foundationsPlusNum \ (next time) we will use \textbf{pseudo}code.
+
+\pause
+It looks like Java and feels like Java but
+\begin{itemize}
+  \pause \item algorithms from the slides \textbf{will not work} as expected if run on the JVM  
+\end{itemize}
+
+\pause
+In Lecture~\cacheCoherencyNum \ and Lecture~\langMMNum \ we will understand why.
+
+\pause
+We are going to do some real Computer Science
+\begin{itemize}
+  \pause \item it should work from mathematical point of view ;)
+\end{itemize}
+
+\pause
+Theoretical intuition and insights will help us to understand 
+\begin{itemize}
+  \pause \item how to implement efficient and correct algorithms
+  \pause \item using existing hardware
+\end{itemize}
+
+\pause
+
+\textbf{Hint:} focus on ideas rather mathematical formalisms.
 
 \end{frame}
 
@@ -69,1620 +125,1459 @@ Our course briefly introduces some important theoretical concepts, for better un
 \tableofcontents
 \end{frame}
 
+\section{Time, events, intervals, precedence}
 
-\section{Progress conditions}
 
-\begin{frame}[t]{Progress conditions}
+\begin{frame}[fragile, t]{Time and events}
 
+An \textbf{event} $a_0$ of thread \texttt{A} is
 \begin{itemize}
-
-  \item \textbf{Deadlock-free}: some thread trying to acquire the lock eventually succeeds
-  \item \textbf{Starvation-free}: every thread trying to acquire the lock eventually succeeds
-  
-\end{itemize}
-\end{frame}
-
-\questiontime{\textbf{Starvation-free} is a property of mutual exclusion algorithm. If some thread owns mutex, other thread will have to wait. Name concurrent problems that are related to this situation.}
-
-\questiontime{\textbf{Starvation-free} is a property of mutual exclusion algorithm. If some critical section (code inside mutex) takes a lot of time then progress of system-as-a-whole will be very slow. Imagine that all critical sections are small (e.g. 100 machine instructions). Could you guarantee "fast" \ progress of different threads?}
-
-\begin{frame}[t,noframenumbering]{Progress conditions}
-
-\begin{itemize}
-
-  \item \textbf{Deadlock-free}: some thread trying to acquire the lock eventually succeeds
-  \item \textbf{Starvation-free}: every thread trying to acquire the lock eventually succeeds
-
-  \item \textbf{Lock-free}: some thread calling a method eventually returns
-  \pause
-
-  \item \textbf{Wait-free}: every thread calling a method eventually returns
-
-\end{itemize}
-
-\pause
-\textbf{Remember}: this \textit{eventually} may heavily depend on scheduler, processor, algorithm
-
-\end{frame}
-
-\begin{frame}[t,noframenumbering]{Progress conditions}
-
-\begin{itemize}
-
-  \item \textbf{Deadlock-free}: some thread trying to acquire the lock eventually succeeds
-  \item \textbf{Starvation-free}: every thread trying to acquire the lock eventually succeeds
-
-  \item \textbf{Lock-free}: some thread calling a method eventually returns
-  \item \textbf{Wait-free}: every thread calling a method eventually returns
+  \item Instantaneous
+  \item No simultaneous events (break ties)
 \end{itemize}
 
 \begin{center}
-\begin{tabular}{ccc}
-                        & Non-blocking & Blocking \\
-Everyone makes progress & Wait-free & Starvation-free \\
-Someone makes progress  & Lock-free & Deadlock-free 
-\end{tabular}
+  \includegraphics[width=0.5\textwidth]{./pics/time/Timeline.png}
+\end{center}
+
+\end{frame}
+
+
+\begin{frame}[fragile, t]{Threads}
+
+A thread \texttt{A} is (formally) a sequence $a_0$, $a_1$, ... of events 
+\begin{itemize}
+  \item “Trace” model
+  \item Notation: $a_0 \rightarrow a_1$ indicates order
+\end{itemize}
+
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/time/ThreadTrace.png}
 \end{center}
 
 \pause
-
-Non-blocking progress conditions:
+Example Thread events:
 \begin{itemize}
-  \item \textbf{Wait-free}, \textbf{Lock-free}: computation as a whole makes progress independently of how the system schedules threads
-\end{itemize}
-
-\pause
-
-Dependent blocking progress conditions:
-\begin{itemize}
-  \item \textbf{Starvation-free}, \textbf{Deadlock-free}: progress occurs only if the underlying platform provides certain guarantees
-\end{itemize}
-\end{frame}
-
-\begin{frame}[t,noframenumbering]{Progress conditions}
-
-Non-blocking progress conditions:
-\begin{itemize}
-  \item \textbf{Wait-free}, \textbf{Lock-free}: computation as a whole makes progress independently of how the system scheduler threads
-\end{itemize}
-
-Dependent blocking progress conditions:
-\begin{itemize}
-  \item \textbf{Starvation-free}, \textbf{Deadlock-free}: progress occurs only if the underlying platform provides certain guarantees
-\end{itemize}
-
-
-\pause
-Dependent non-blocking progress condition:
-\begin{itemize}
-  \item \textbf{Obstruction-free} method: if, from any point after which it executes in isolation, it finishes in a finite number of steps
+  \item Assign constant to local variable
+  \item Invoke method
+  \item Return from method
+  \item ...
 \end{itemize}
 
 \end{frame}
 
+\begin{frame}[fragile, t]{Threads are state machines}
 
-\questiontime{Describe \textbf{obstruction-free} but not \textbf{lock-free} method. 
+\begin{center}
+  \includegraphics[width=0.7\textwidth]{./pics/time/ThreadsStateMachines.png}
+\end{center}
 
-Reminder: 
+\end{frame}
+
+
+\begin{frame}[fragile]{Concurrent threads}
+
+\begin{tabular}{p{7cm}p{5cm}}
+\textcolor{yellow}{Thread A}  & \textcolor{green}{Thread B} \\
+\begin{center}
+  \includegraphics[width=0.4\textwidth]{./pics/time/ThreadA.png}
+\end{center}
+&
+\begin{center}
+  \includegraphics[width=0.4\textwidth]{./pics/time/ThreadB.png}
+\end{center}
+
+\end{tabular}
+
+Events of two or more threads:
 \begin{itemize}
-  \item \textbf{Lock-free} -- someone makes progress even with "bad" \ scheduler
-  \item \textbf{Obstruction-free} -- someone makes progress if others are stopped
+  \item Interleaved
+  \item Not necessarily independent
 \end{itemize}
-}
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/time/Interleavings.png}
+\end{center}
+
+\end{frame}
 
 
-\begin{frame}{Progress conditions: summary}
+\begin{frame}[t, fragile]{Meta-language alert}
 
-Non-blocking progress conditions: progress happens unconditionally
+\textbf{Important}: we are using quite familiar notation
 \begin{itemize}
-  \item lock-free: for some thread
-  \item wait-free: for any thread
+  \item Undivisible events (elementary operations)
+  \item Ordered on single timeline
 \end{itemize}
 
-Dependent blocking progress conditions: progress happens if scheduling is "fair"
+\end{frame}
+
+\questiontime{Totally ordered events on a single timeline. Have we encountered similar concept before?}
+
+\begin{frame}[t,fragile,noframenumbering]{Meta-language alert}
+
+\textbf{Important}: we are using quite familiar notation
 \begin{itemize}
-  \item deadlock-free: for some thread
-  \item starvation-free: for any thread
+  \item Undivisible events (elementary operations)
+  \item Ordered on single timeline
 \end{itemize}
 
-Dependent non-blocking progress condition: progress happens if scheduling is "unfair"
+This is \textbf{not} interleaving model!
+
 \begin{itemize}
-  \item obstruction-free: for thread in isolation (other threads are frozen)
+  \pause \item We guarantee order of \textbf{events} only 
+  \pause \item Assignment to shared memory location could be represented as \textbf{two} events (interval)
+  \begin{itemize}
+    \item Thread A \texttt{starts assignment of value V to location L}
+    \item Thread A \texttt{finishes assignment of value V to location L}
+  \end{itemize}
+  \pause \item Overlapping intervals happen ''simultaneously'' (''in parallel'', ''independent'')
+\end{itemize}
+
+\pause
+We are developing a formal language to express different concurrency models. 
+
+\pause
+Interleaving model would be the simplest approach, ''one of many''.
+
+\end{frame}
+
+\begin{frame}[fragile]{Methods are intervals}
+
+An \textbf{interval}  $A_0 =(a_0, a_1)$ is
+\begin{itemize}
+  \item Time between events $a_0$ and $a_1$ 
+\end{itemize}
+
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/time/Interval.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Overlapping intervals}
+
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/time/Overlap.png}
+\end{center}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Disjoint intervals}
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/time/Disjoint.png}
+\end{center}
+
+\pause
+\textbf{Precedence}:
+\begin{itemize}
+  \item Interval $A_0$ \textbf{precedes} interval $B_0$
+  \item Notation: $A_0 \rightarrow B_0$
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Precedence}
+
+$A_0 \rightarrow B_0$
+\begin{itemize}
+  \item $A_0$ \textbf{precedes} interval $B_0$
+  \pause
+  \item $A_0$ \textbf{happens before} interval $B_0$
+  \pause
+  \item Fancy way to say "Middle Ages $\rightarrow$ Renaissance"
+\end{itemize}
+
+\pause
+
+what about \textit{this week} vs \textit{this month}?
+
+\pause
+
+\onslide<7->{Precedence is a partial order}:
+\begin{itemize}
+  \item Never true that $A \rightarrow A$. \onslide<8->{(Irreflexive)}
+  \item If $A \rightarrow B$ then not true $B \rightarrow A$.  \onslide<9->{(Antisymmetric)}
+  \item If $A \rightarrow B$ and $B \rightarrow C$ then $A \rightarrow C$. \onslide<10->{(Transitive)}
+  \pause
+  \item Remember: $A \rightarrow B$ and $B \rightarrow A$ might both be false!
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Homework: precedence}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/7.1}}
+\begin{homeworkmail}{Task 7.1}
+    Prove that precedence is irreflexive, antisymmetric, transitive partial order.
+\end{homeworkmail}
+
+\end{frame}
+
+\begin{frame}{Jargon alert}
+
+\textbf{Happens-before} is an overloaded concept
+\begin{itemize}
+  \pause \item Language memory model of Java language
+  \pause \item Language memory model of C++ language (not the same!)
+  \pause \item Mathematical notion used in ''The Art of Multiprocessor Programming'' to teach students
+  \pause \item Formalisms used in academic papers to express hardware memory models
+  \pause \item ...
+\end{itemize}
+
+\pause 
+In our course we \textbf{will not} use term ''happens-before'' to avoid confusion
+
+\begin{itemize}
+  \pause \item Precedence -- partial order on intervals consisting of elementary events
+  \pause \item Precedence + additional rules = something more advanced
+\end{itemize}
+
+\pause
+Please wait until Lecture~\langMMNum.
+
+\end{frame}
+
+\section{Mutual exclusion}
+\showTOC
+
+\subsection{2 threads}
+
+\begin{frame}[t]{Mutual exclusion}
+
+Thread is \textit{well formed} if:
+\begin{itemize}
+  \item each critical section is associated with a unique \texttt{Lock} object
+  \item \texttt{Lock.lock} when trying to enter critical section
+  \item \texttt{Lock.unlock} when leaving critical section
+\end{itemize}
+
+Let $CS_{A}^{j}$ be the interval: thread \texttt{A} executes critical section for \texttt{j}-th time.
+
+\end{frame}
+
+\begin{frame}{Mutual exclusion for 2 agents}
+
+$CS_{A}^{j}$: thread \texttt{A} executes critical section for \texttt{j}-th time.
+
+\pause
+
+\textbf{Mutual exclusion}:
+\begin{itemize}
+  \item Critical sections of different threads do not overlap. \pause
+   $\forall A, B, k, j \ CS_{A}^{k} \rightarrow CS_{B}^{j}$ or $CS_{B}^{j} \rightarrow CS_{A}^{k}$
+\end{itemize}
+
+\pause
+\textbf{Freedom from deadlock}:
+\begin{itemize}
+  \item If some thread attempts to acquire the lock, then some thread will succeed in acquiring the lock. If thread \texttt{A} calls \texttt{lock()}
+  but never acquires the lock, then other threads must be completing an infinite number of critical sections.
+\end{itemize}
+
+\pause
+
+\textbf{Freedom from starvation (lockout freedom)}:
+\begin{itemize}
+  \item Every thread that attempts to acquire the lock eventually succeeds. Every call to \texttt{lock()} eventually returns.
 \end{itemize}
 
 \pause
 
 \begin{theorem}
-\textbf{Wait-free} implies \textbf{lock-free} implies \textbf{obstruction-free}
-
-\textbf{Starvation-free} implies \textbf{deadlock-free}
-\end{theorem}
-
+  Starvation freedom implies deadlock freedom.
+\end{theorem} 
 \end{frame}
 
+%\questiontime{Mutual exclusion, Freedom from deadlock, Freedom from starvation. Which are safety properties, which are liveness properties?}
 
-\section{Space of registers}
-\showTOC
-
-
-\begin{frame}{Concurrency foundations}
-
-\begin{itemize}
-  \item What is the \textit{weakest} form of communication that supports mutual exclusion?
-  \pause
-  \item What is the \textit{weakest} shared object that allows shared-memory computation?  
-\end{itemize}
-
-\pause
-Alan Turing showed what \textbf{is computable} and what is \textbf{not computable} on a sequential machine.
-
-\pause
-
-Turing computability
-\begin{itemize}
-  \item Mathematical model of computation
-  \item What is (and is not) computable
-  \item Efficiency (mostly) irrelevant
-\end{itemize}
-
-\pause
-
-Shared-Memory Computability?
-\pause
-\begin{itemize}
-  \item Mathematical model of concurrent computation
-  \item What is (and is not) concurrently computable
-  \item Efficiency (mostly) irrelevant
-\end{itemize}
-
-\end{frame}
+\questiontime{Restaurant "Concurrency pitfalls" \ claims that every philosopher will eat ordered meal before Sun explodes. Does it provide \textbf{Freedom from starvation}?}
 
 
-\begin{frame}{Foundations}
-
-To understand modern multiprocessors we need to ask some basic questions:
-\begin{itemize}
-  \pause
-  \item What is the weakest useful form of shared memory?
-  \pause
-  \item What can it do?
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t, fragile]{Register}
-
-Memory location\footnote{\textit{register} is a historical name}
+\begin{frame}[fragile]{LockOne}
 
 \begin{minted}{java}
-public interface Register<T> {
-  public T read();  
-  public void write(T v);
+class LockOne implements Lock {
+  boolean[] flag = new boolean[2];
+  void lock() {
+    int i = ThreadID.get(); // 0 or 1
+    int j = 1 - i;
+    flag[i] = true;         // I want to enter
+    while (flag[j]) {}      // await other thread
+  }
+  void unlock() {
+    int i = ThreadID.get();  
+    flag[i] = false;        // I do not want to enter any more
+  }
 }
 \end{minted}
 \end{frame}
 
-\begin{frame}[t,fragile,noframenumbering]{Register: capacity}
-
-Memory location
+\begin{frame}[fragile]{LockOne: deadlock}
 
 \begin{minted}{java}
-public interface Register<T> {
-  public T read();  
-  public void write(T v);
+void lock() {
+  int i = ThreadID.get();
+  int j = 1 - i;
+  flag[i] = true;
+  while (flag[j]) {}
+}
+void unlock() {
+  flag[ThreadID.get()] = false;
 }
 \end{minted}
 
-\texttt{T} is a type of register
+$write_{A}(flag[A] = true)$ occur before $read_{B}(flag[A])$
+
+$write_{B}(flag[B] = true)$ occur before $read_{A}(flag[B])$
+\end{frame}
+
+
+\begin{frame}[fragile]{LockOne: mutual exclusion}
+\begin{minted}{java}
+void lock() {
+  flag[i] = true;
+  while (flag[j]) {}
+}
+void unlock() {
+  flag[i] = false;
+}
+\end{minted}
+
+From the code:
 \begin{itemize}
-  \item boolean
-  \item m-bit integer
+  \item $write_{A}(flag[A] = true) \rightarrow read_{A}(flag[B] = false) \rightarrow CS_{A}$ 
+  \item $write_{B}(flag[B] = true) \rightarrow read_{B}(flag[A] = false) \rightarrow CS_{B}$ 
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}{Register: supported level of concurrency}
+\begin{frame}[fragile]{LockOne: mutual exclusion}
 
-\textbf{Concurrency:} at least two threads
+Plan:
+\begin{itemize}
+  \item Assume $CS_A^j$ overlaps $CS_B^k$.
+  \item Consider each thread's last ($j$-th and $k$-th) read and write in the \texttt{lock()} method before entering 
+  \item Derive a contradiction
+\end{itemize}
+
+\pause
+Informal hint: Thread A observed \texttt{flag[B] = false} and entered $CS_A^j$ \textbf{and then} Thread B entered $CS_B^k$ which required to write \texttt{flag[B] = true}
+
+\pause
+From assumption:
+\begin{itemize}
+  \item $read_{A}(flag[B] = false) \rightarrow write_{B}(flag[B] = true)$ 
+  \item $read_{B}(flag[A] = false) \rightarrow write_{A}(flag[A] = true)$ 
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-1.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-2.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-3.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-4.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-5.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-6.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,nofrmanumbering]{LockOne: mutual exclusion}
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{./pics/lock1/combine-7.png}
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}[fragile]{LockOne}
+\framesubtitle{Properties}
+
+\begin{itemize}
+  \item \textcolor{green}{Mutual exclusion}
+  \item \textcolor{red}{Deadlock-freedom}
+\end{itemize}
+
+\pause
+
+\begin{tabular}{p{5cm}p{5cm}}
+
+\begin{minted}{java}
+     flag[i] = true;
+     while (flag[j]) {}
+\end{minted}
+
+ &  
+
+\begin{minted}{java}
+    flag[j] = true;
+    while (flag[i]) {}
+\end{minted}
+
+\end{tabular}
 
 \pause
 
 \begin{itemize}
-  
-  \item Single-Reader/Single-Writer Register \pause (SRSW)
-  \pause
+  \item Concurrent executions can deadlock
+  \item Sequential executions OK
+\end{itemize}
+\end{frame}
 
-  \item Multi-Reader/Single-Writer Register \pause (MRSW)
 
-  \pause
-  \item Multi-Reader/Multi-Writer Register \pause (MRMW)
+\begin{frame}[fragile]{LockTwo}
 
-  \pause
-  \item SRMW is exotic, we will not discuss it
+\begin{minted}{java}
+public class LockTwo implements Lock {
+ private int victim;
+ public void lock() {
+  int i = ThreadID.get(); // 0 or 1
+  victim = i;             // let the other go first
+  while (victim == i) {}; // wait 
+ }
+ public void unlock() {}
+}
+\end{minted}
+
+\pause
+Satisfies Mutual Exclusion:
+\begin{itemize}
+  \item if thread \texttt{i} in $CS$
+  \item then \texttt{victim == j}
+  \item cannot be both \texttt{0} and \texttt{1}
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}[t,fragile]{Register consistency: safe register}
+\begin{frame}[fragile]{LockTwo}
 
-Safe Register:
+\begin{minted}{java}
+public class LockTwo implements Lock {
+ private int victim;
+ public void lock() {
+  int i = ThreadID.get(); // 0 or 1
+  victim = i;             // let the other go first
+  while (victim == i) {}; // wait 
+ }
+ public void unlock() {}
+}
+\end{minted}
+
+\pause
+
+Not deadlock free:
 \begin{itemize}
-  \item If reads and writes do not overlap returns latest value (looks like sequential register)
-  \pause
-  \item Returns \textbf{arbitrary} value in case of overlap (looks like Undefined Behaviour)
+  \item Sequential execution deadlocks
+  \item Concurrent execution does not
 \end{itemize}
-
 \end{frame}
 
 
-\begin{frame}[t,fragile,noframenumbering]{Register consistency: safe register}
+\begin{frame}[fragile]{LockOne and LockTwo}
 
-Safe Register:
+LockOne, LockTwo:
 \begin{itemize}
-  \item Returns \textit{latest} value if reads and writes do not overlap 
-  \item Returns \textit{arbitrary} (but valid) value in case of overlap but does not stop execution
+  \item \textcolor{green}{Mutual exclusion}
+  \item \textcolor{red}{Deadlock-freedom}
 \end{itemize}
 
 \pause
 
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/safe/safe1.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/safe/safe2.png}
-\end{center}
-}
-
-\end{frame}
-
-\begin{frame}[t,fragile]{Register consistency: regular register}
-
-Regular Register:
+LockOne:
 \begin{itemize}
-  \item Returns old value if no overlap (safe)
-  
-  \pause
-  \item Old or one of new values if overlap (not arbitrary)
+  \item Concurrent executions can deadlock
+  \item Sequential executions OK
 \end{itemize}
 
 \pause
 
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/regular/reg1.png}
-\end{center}
-}
-
-\only<4>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/regular/reg2.png}
-\end{center}
-}
-
-\only<5>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/regular/reg3.png}
-\end{center}
-}
-
-\only<6>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/regular/reg4.png}
-\end{center}
-}
-
-\end{frame}
-
-\begin{frame}{Register consistency: regular register != linearizable}
-
-Regular Register:
+LockTwo:
 \begin{itemize}
-  \item Returns old value if no overlap (safe)
-  \item Old or one of new values if overlap (not arbitrary)
+  \item Concurrent execution OK
+  \item Sequential execution can deadlock
 \end{itemize}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/regular/reg5.png}
-\end{center}
 
 \pause
 
-\begin{center}
-  \textbf{Regular != linearizable}
-\end{center}
-
+\textbf{Idea:} combine them!
 \end{frame}
 
+\begin{frame}[fragile]{Peterson’s Algorithm}
 
-\begin{frame}[t,fragile]{Register consistency: atomic register}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/atomic/atomic1.png}
-\end{center}
-
-Linearizable to sequential safe register
-
+\begin{minted}{java}
+class Peterson implements Lock {
+  private boolean[] flag = new boolean[2];
+  private int victim;
+  public void lock() {
+    int i = ThreadID.get(); // 0 or 1
+    int j = 1 - i;
+    flag[i] = true;         // I am interested
+    victim  = i;            // you go first
+    while (flag[j] && victim == i) {}; // wait while other interested and 
+                                       // I am the victim
+  }
+  public void unlock() {
+   flag[ThreadID.get()] = false; // I am not interested
+  }
+}
+\end{minted}
 \end{frame}
 
+\begin{frame}[fragile]{Peterson’s Algorithm}
+\framesubtitle{Mutual exclusion}
 
-\begin{frame}[t,fragile,noframenumbering]{Register consistency: atomic register}
+\begin{minted}{java}
+public void lock() {
+  flag[i] = true;         // I am interested
+  victim  = i;            // you go first
+  while (flag[j] && victim == i) {}; // wait while other interested and 
+                                     // I am the victim
+}
+\end{minted}
 
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/atomic/atomic2.png}
-\end{center}
-
-Linearizable to sequential safe register
-
-\end{frame}
-
-\begin{frame}[fragile]{Register consistency: jokes to help}
-
+From the code:
 \begin{itemize}
-  \item Register means shared memory location
-
-  \pause
-  \item \textbf{Safe} register is quite unsafe -- generates random values under contention
-  
-  \pause
-  \item \textbf{Regular} register exhibits irregular behaviour -- could oscillate under contention
-
-  \pause
-  \item \textbf{Atomic} register changes state somewhere inside method -- linearization point depends on execution
+  \item $write_{B}(flag[B] = true) \rightarrow write_{B}(victim = B)$
+  \item $write_{A}(victim = A) \rightarrow read_{A}(flag[B]) \rightarrow read_{A}(victim)$ 
 \end{itemize}
-\end{frame}
 
-\begin{frame}{Register space}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/space1.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[fragile, t]{Weakest register}
-
-SRSW Safe Boolean register
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/weakest1.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/weakest2.png}
-\end{center}
-}
-
-\end{frame}
-
-\begin{frame}{Spoilers}
-
-From SRSW safe Boolean register:
+Assumption (both threads entered CS, latest to write victim is thread \texttt{A}):
 \begin{itemize}
-  \pause
-  \item All the other registers
+  \item $write_{B}(victim = B) \rightarrow write_{A}(victim = A)$
+\end{itemize}
 
+\end{frame}
+
+
+\begin{frame}[fragile, t]{Peterson’s Algorithm}
+\framesubtitle{Mutual exclusion}
+\begin{itemize}
+  \item $write_{B}(flag[B] = true) \rightarrow write_{B}(victim = B)$
+  \item $write_{A}(victim = A) \rightarrow read_{A}(flag[B]) \rightarrow read_{A}(victim)$ 
+  \item $write_{B}(victim = B) \rightarrow write_{A}(victim = A)$
+\end{itemize}
+
+\pause
+
+Let`s swap second and third lines.
+
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Peterson’s Algorithm}
+\framesubtitle{Mutual exclusion}
+\begin{itemize}
+  \item $write_{B}(flag[B] = true) \rightarrow write_{B}(victim = B)$
+  \item $write_{B}(victim = B) \rightarrow write_{A}(victim = A)$
+  \item $write_{A}(victim = A) \rightarrow read_{A}(flag[B]) \rightarrow read_{A}(victim)$ 
+\end{itemize}
+
+\pause
+
+Let`s remove repeats.
+
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Peterson’s Algorithm}
+\framesubtitle{Mutual exclusion}
+\begin{itemize}
+  \item $write_{B}(flag[B] = true) \rightarrow$
+  \item $write_{B}(victim = B) \rightarrow$
+  \item $write_{A}(victim = A) \rightarrow read_{A}(flag[B]) \rightarrow read_{A}(victim)$ 
+\end{itemize}
+
+\pause
+
+Thread \texttt{A} read \texttt{flag[B] == true} and \texttt{victim == A} so it could not have entered the $CS$.
+
+\pause
+
+QED.
+\end{frame}
+
+\begin{frame}[fragile]{Peterson’s Algorithm}
+\framesubtitle{Starvation freedom (implies deadlock freedom)}
+
+\begin{minted}{java}
+public void lock() {
+  flag[i] = true;
+  victim  = i;
+  while (flag[j] && victim == i) {};                                    
+}
+public void unlock() {
+  flag[i] = false;
+}
+\end{minted}
+
+\pause
+
+\begin{itemize}
+  \item Thread \texttt{i} blocked only if \texttt{j} repeatedly re-enters so \texttt{flag[j] == true} and \texttt{victim == i}.
   \pause
+  \item When thread \texttt{j} re-enters it sets \texttt{victim = j}.
+  \pause
+  \item So thread \texttt{i} gets in.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Summary: 2-thread mutual exclusion}
+
+Formalize concurrent method execution:
+\begin{itemize}
+  \item Single timeline
+  \item Totally ordered atomic events
+  \item Methods represented as partially ordered intervals
+  \item \textit{Precedence} is irreflexive, antisymmetric, transitive partial order
+\end{itemize}
+
+\pause
+
+Formalize mutex properties:
+\begin{itemize}
   \item Mutual exclusion
-
-  \pause
-  \item Consistent and non-blocking snapshot of $N$ registers
+  \item Deadlock freedom
+  \item Starvation freedom (implies Deadlock freedom)
 \end{itemize}
 
 \pause
 
-But not everything!
+Prove theorems:
 \begin{itemize}
-  \item Consensus hierarchy
+  \item Algorithm has property (\textit{suppose not ...})
+  \item Algorithm lacks property (provide counterexample)
 \end{itemize}
 
 \end{frame}
 
-\section{Register constructions}
-\showTOC
+\subsection{N threads}
+\showTOCSub
 
-\begin{frame}{Register constructions: plan}
+\begin{frame}[fragile]{Filter Lock}
+\framesubtitle{Idea}
 
-Not interesting to rely on mutual exclusion in register constructions
+There are n-1 ''waiting rooms'' called levels.
+
 \begin{itemize}
-  \item We want registers to implement mutual exclusion!
-  \item It’s cheating to use mutual exclusion to implement itself!
+  \item At each level
+  \begin{itemize}
+    \item At least one enters level
+    \item At least one blocked if many try
+  \end{itemize}
+  \item Only one thread makes it through
 \end{itemize}
-
-\pause
-
-\begin{definition}
-  An object implementation is \textbf{wait-free} if every method call completes in a finite number of steps 
-\end{definition} 
-
-\pause
-
-No mutual exclusion
-\begin{itemize}
-  \item Thread could halt in critical section
-  \item Build mutual exclusion from registers
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Register constructions: plan}
-
-From Safe SRSW Boolean to Atomic Snapshots
 
 \begin{center}
-  \includegraphics[width=0.4\textwidth]{./pics/space2.png}
+  \includegraphics[width=0.2\textwidth]{./pics/filter/pyramid.png}
 \end{center}
 
 \end{frame}
 
 
-\begin{frame}{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean
-  \item MRSW Safe Boolean
-  \item MRSW Regular Boolean
-  \item MRSW Regular
-  \item MRSW Atomic
-  \item MRMW Atomic
-  \item Atomic snapshot
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[noframenumbering]{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean \textbf{(1)}
-  \item MRSW Safe Boolean \textbf{(2)}
-  \item MRSW Regular Boolean
-  \item MRSW Regular
-  \item MRSW Atomic
-  \item MRMW Atomic
-  \item Atomic snapshot
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}[t,fragile]{Safe MRSW Boolean from Safe SRSW Boolean: notation}
+\begin{frame}[fragile]{Filter Lock}
+\framesubtitle{Level and victim}
 
 \begin{minted}{java}
-public class SafeBoolMRSWRegister implements Register<Boolean> {
-  public boolean read() { ... }
-  public void write(boolean x) { .. }
-}
-\end{minted}
-
-\pause
-
-\begin{itemize}
-  \item \texttt{Safe} -- consistency
-  \item Bool -- capacity
-  \item MRSW -- concurrency
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Safe MRSW Boolean from Safe SRSW Boolean: idea}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/2.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/3.png}
-\end{center}
-}
-
-\only<4>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/4.png}
-\end{center}
-}
-
-\only<5>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/5.png}
-\end{center}
-}
-
-\only<6>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c1/6.png}
-\end{center}
-}
-\end{frame}
-
-\begin{frame}[t,fragile]{Safe MRSW Boolean from Safe SRSW Boolean}
-
-\begin{minted}{java}
-public class SafeBoolMRSWRegister implements Register<Boolean> {
-  // use weaker registers
-  private SafeBoolSRSWRegister[] r = new SafeBoolSRSWRegister[N];
-
-  public void write(boolean x) {
-    for (int j = 0; j < N; j++) {
-      r[j].write(x); // announce new value for every other thread
-    }
-  }
-  public boolean read() {
-    int i = ThreadID.get();
-    return r[i].read(); // read own copy
-  }
-}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean \textbf{(2)}
-  \item MRSW Regular Boolean \textbf{(3)}
-  \item MRSW Regular
-  \item MRSW Atomic
-  \item MRMW Atomic
-  \item Atomic snapshot
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}{Regular MRSW Boolean from Safe MRSW Boolean: idea}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c2/1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c2/2.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/c2/3.png}
-\end{center}
-}
-
-\end{frame}
-
-\begin{frame}[fragile]{Regular MRSW Boolean from Safe MRSW Boolean: idea}
-
-\begin{minted}{java}
-public class RegBoolMRSWRegister implements Register<Boolean> {
-  private SafeBoolMRSWRegister value; // actual data
-  private thread_local boolean old; // last bit this thread wrote
-  public void write(boolean x) {
-    if (old != x) {   // if new value is different from my previous write
-      value.write(x); // then update
-      old = x;        // remember my decision
-    }
-  }
-  public boolean read() {
-    return value.read(); // in case of overlap any result (true/false) is OK
-  }
-}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean \textbf{(3)}
-  \item MRSW Regular \textbf{(4)}
-  \item MRSW Atomic
-  \item MRMW Atomic
-  \item Atomic snapshot
-\end{itemize}
-
-\end{frame}
-
-\begin{frame}{Representing m values}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/unary/unary1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/unary/unary2.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/unary/unary3.png}
-\end{center}
-}
-
-\end{frame}
-
-\begin{frame}[fragile]{Regular MRSW Integer from Regular MRSW Boolean}
-
-\begin{minted}{java}
-public class RegIntMRSWRegister implements Register<Integer> {
-  RegBoolMRSWRegister[M] bit; // unary representation: bit[i] means value i
-  public void write(int x) {
-    bit[x].write(true);       // set bit x
-    for (int i = x - 1; i >= 0; i--) {
-      bit[i].write(false);    // clear bits from higher to lower
-    }
-  }
-  public int read() {
-    for (int i = 0; i < M; i++) { // Scan from lower to higher
-      if (bit[i].read()) {        // return first bit set
-        return i;
-      }
+class Filter implements Lock {
+  // level[i] for thread i
+  int[] level;  
+  // victim[L] for level L
+  int[] victim; 
+  public Filter(int n) {
+    level  = new int[n];
+    victim = new int[n]; 
+    for (int i = 1; i < n; i++) {
+      level[i] = 0;
     }
   }
 }
 \end{minted}
 
-\end{frame}
-
-
-\begin{frame}{Critical task №2: easy}
-
-\begin{homeworkcritical}
-  Prove that Regular MRSW Integer construction is correct and wait-free.
-
-  Use Section 4.2.3 "A Regular M-Valued MRSW Register"
-\end{homeworkcritical}
+\begin{tikzpicture}[remember picture,overlay]
+\node[xshift=3cm,yshift=-1.0cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/filter/level_victim.png}};
+\end{tikzpicture}
 
 \end{frame}
 
 
-\begin{frame}{Register constructions: road map}
+\begin{frame}[fragile,t]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f1.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f2.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f3.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f4.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f5.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,t,noframenumbering]{Filter Lock}
+\begin{center}
+  \includegraphics[width=0.6\textwidth]{./pics/filter/f6.png}
+\end{center}
+\end{frame}
+
+
+\begin{frame}[fragile]{Filter Lock}
+\framesubtitle{Proof idea}
 
 \begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean 
-  \item MRSW Regular \textbf{(4)}
-  \item MRSW Atomic \textbf{(5)}
-  \item MRMW Atomic
-  \item Atomic snapshot
+  \item Start at level \texttt{L = 0}
+  \item At most \texttt{n - L} threads enter level \texttt{L}
+  \item Mutual exclusion at level \texttt{L = n-1}
+\end{itemize}
+
+\pause
+
+Induction Hypothesis:
+\begin{itemize}
+  \item No more than \texttt{n-(L-1)} at level \texttt{L-1} 
+  \item Induction step: by contradiction 
+  \item Assume all at level \texttt{L-1} enter level \texttt{L}
+  \item Thread \texttt{A} last to write \texttt{victim[L]} 
+  \item Thread \texttt{B} is any other thread at level \texttt{L}
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[fragile]{Homework: Filter Lock}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/7.2}}
+\begin{homeworkmail}{Task 7.2}
+    \begin{itemize}
+      \item Prove that Filter Lock algorithm satisfies mutual exclusion.
+      \item Prove that Filter Lock algorithm is starvation-free.
+    \end{itemize}
+\end{homeworkmail}
+
+Supplementary materials:
+\begin{itemize}
+    \item Slides 77-93 from \texttt{chapter\_02.ppt}
+    \item Section 2.4 ''The Filter Lock'' (pages 28 - 31) from ''The Art of Multiprocessor Programming''
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}[noframenumbering]{Register constructions: road map}
+\begin{frame}[t,fragile]{Filter Lock}
+\framesubtitle{No starvation}
 
+Filter Lock satisfies properties:
 \begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean 
-  \item MRSW Regular \textbf{(4)}
-  \begin{itemize}
-    \item SRSW Atomic \textbf{(4.5)} \only<2->{(proof)}    
-  \end{itemize}
-  \item MRSW Atomic \textbf{(5)} \only<3->{(idea)}
-  \item MRMW Atomic
-  \item Atomic snapshot
+  \item Just like Peterson Alg at any level
+  \item So no one starves 
 \end{itemize}
 
+\pause
+But what about fairness?
+
+\pause
+Threads can be overtaken by others 
+
 \end{frame}
 
 
-\begin{frame}[noframenumbering]{Register constructions: road map}
+\begin{frame}[fragile]{Summary: N-thread mutual exclusion}
 
+N-level design:
 \begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean 
-  \item MRSW Regular \textbf{(4)}
-  \begin{itemize}
-    \item SRSW Atomic \textbf{(4.5)} (proof)
-  \end{itemize}
-  \item MRSW Atomic
-  \item MRMW Atomic
-  \item Atomic snapshot
+  \item every step ''filters'' (prevents from progress) at least one thread
+  \item reuse ideas from simpler design (2-thread Peterson`s algorithm)
 \end{itemize}
 
-\end{frame}
+\pause
 
-\begin{frame}[fragile]{Atomic SRSW from Regular SRSW: problem}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/sr-atomic/sr1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/sr-atomic/sr2.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/sr-atomic/sr3.png}
-\end{center}
-}
-
-\only<4>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/sr-atomic/sr4.png}
-\end{center}
-}
-\end{frame}
-
-
-\begin{frame}[fragile]{Atomic SRSW from Regular SRSW: timestamped values}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/stamp/stamp1.png}
-\end{center}
-}
-
-\only<2->{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/stamp/stamp2.png}
-\end{center}
-}
-
-\only<3->{
-\begin{center}
-  \textbf{Same as atomic}
-\end{center}
-}
-
-\end{frame}
-
-
-\begin{frame}{Timestamped values: clock problem}
-
-How different threads coordinate "current time"?
+We have many memory cells (\textbf{registers}\footnote<2->{Historical name}): boolean \texttt{flag[i]}, integer \texttt{victim[j]}
 \begin{itemize}
   \pause
-  \item They need some kind of consistent global clock
+  \item \textbf{How many} registers are needed to solve N-thread mutual exclusion? 
+  
+  \onslide<6->{Theorem about Lower bounds, next slide}
   \pause
-  \item Mutual exclusion?
+  \item \textbf{What} are those registers? How to describe them formally? 
+  
+  \onslide<7->{Concurrent objects chapter, later today}
+  \pause
+  \item Is there any \textbf{alternative} to registers and how to use it to implement mutual exclusion? 
+  
+  \onslide<8->{Lecture~\atomicsNum}
+\end{itemize}
+
+\end{frame}
+
+\subsection{Lower bounds on the Number of Locations}
+\showTOCSub
+
+\begin{frame}{Mutual exclusion for N threads requires read-write of at least N locations}
+
+\begin{quote}
+  Theorem 2.8.1. Any \texttt{Lock} algorithm that, by reading and writing memory, solves deadlock-free mutual exclusion for three threads must use at least three distinct memory locations.
+\end{quote}
+
+\pause
+
+We will not prove this theorem because of time limits.
+
+\pause
+
+Key insights for keen readers (pages 37-40):
+\begin{itemize}
+  \item Covering state
 \end{itemize}
 
 \pause
-We cannot "cheat" \ by using real clock time. 
+Generalized theorem:
+\begin{quote}
+  $N$-thread deadlock-free mutual exclusion requires $N$ distinct locations.
+\end{quote}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Mutual exclusion: you know so far}
+
+Mutual exclusion could be solved:
+\begin{itemize}
+  \item For \texttt{N} concurrent threads
+  \item Using \texttt{N} boolean and \texttt{N} integer registers
+  \item Provides starvation-freedom
+\end{itemize}
 
 \pause
-In previous construction we were building \textbf{single-writer single-reader} register
+
+Mutual exclusion could not be solved:
+\begin{itemize}
+  \item Using less than \texttt{N} registers
+\end{itemize}
+
+\pause
+
+Few questions remain:
 \begin{itemize}
   \pause
-  \item Writer was timestamping data
+  \item How much time will thread wait until success? \texttt{FilterLock} does not guarantee fairness
 
   \pause
-  \item Reader used stamps to track "latest" \ updates
-\end{itemize}
+  \item Could we "improve" \ registers with some additional operations to speed-up the algorithm?
 
-\pause
-Clock == writer-specific integer counter
+  \pause
+  \item What if threads are created and deleted dynamically?
 
-\pause
-\textbf{Beware:} ensure you understand what is called "timestamp" \ in the following proofs
-
-\end{frame}
-
-
-\begin{frame}{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean 
-  \item MRSW Regular
-  \begin{itemize}
-    \item SRSW Atomic \textbf{(4.5)}
-  \end{itemize}
-  \item MRSW Atomic \textbf{(5)} \only<2->{(idea)}
-  \item MRMW Atomic
-  \item Atomic snapshot
 \end{itemize}
 \end{frame}
 
+\subsection{Optional: fairness}
+\showTOCSub
 
-\begin{frame}[fragile]{Atomic MRSW from Atomic SRSW: naive idea}
+\begin{frame}[fragile]{Fairness and Bakery algorithm}
 
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr2.png}
-\end{center}
-}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Atomic MRSW from Atomic SRSW: naive idea does not work}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr3.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Atomic MRSW from Atomic SRSW: multi-reader table}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr4.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr5.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/mr-atomic/mr6.png}
-\end{center}
-}
-\end{frame}
-
-\begin{frame}[t,fragile]{Atomic MRSW from Atomic SRSW: summary}
-
-In order to achieve high level of
-\begin{itemize}
-  \item consistency (linearizable)
-  \item concurrency (multi-reader) 
-  \item progress condition (wait-freedom)
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile,noframenumbering]{Atomic MRSW from Atomic SRSW: summary}
-
-In order to achieve high level of
-\begin{itemize}
-  \item consistency (linearizable), concurrency (multi-reader), progress condition (wait-freedom)
-\end{itemize}
-
-\pause
-we used complicated algorithm with non-obvious design solutions
-\pause
-\begin{itemize}
-  \item Timestamping of values with writer-local clock
-  \item Readers \textbf{write} values into auxiliary data structures
-  \item Single high-level operation (atomic read or write) requires $N$ low-level steps (update of thread-specific regular registers)
-\end{itemize}
-
-
-\end{frame}
-
-\begin{frame}[t,fragile,noframenumbering]{Atomic MRSW from Atomic SRSW: summary}
-
-In order to achieve high level of
-\begin{itemize}
-  \item consistency (linearizable), concurrency (multi-reader), progress condition (wait-freedom)
-\end{itemize}
-
-we used complicated algorithm with non-obvious design solutions
-\begin{itemize}
-  \item Timestamping, Readers cooperate with writers, Decomposition
-\end{itemize}
-
-\pause
-which was hard to prove
-\pause
-\begin{itemize}
-  \item Safe register is unsafe and counter-intuitive
-  \item Regular register oscillate under contention
-  \item Atomic register has "floating" \ linearization points
-\end{itemize}
-
-\pause
-but beneficial
-\pause
-\begin{itemize}
-  \item Any algorithm based on atomic registers could be implemented via safe SRSW boolean registers
-  \item Every register construction is wait-free and does not depend on scheduler
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Register constructions: road map}
-
-\begin{itemize}
-  \item SRSW Safe Boolean 
-  \item MRSW Safe Boolean 
-  \item MRSW Regular Boolean 
-  \item MRSW Regular
-  \begin{itemize}
-    \item SRSW Atomic     
-  \end{itemize}
-  \item MRSW Atomic \textbf{(5)}
-  \item MRMW Atomic \textbf{(6)} \only<2->{(optional homework)}
-  \item Atomic snapshot
-\end{itemize}
-\end{frame}
-
-\begin{frame}[t,fragile]{Atomic MRMW from Atomic MRSW: optional homework}
-
-Optional homework: slides 95-103 from \texttt{chapter\_04.ppt}
-
-Optional homework: Section 4.2.6 "An Atomic MRMW Register" \ (pages 85-87)
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/7.3}}
+\begin{homeworkmail}{Task 7.3}
+    \begin{itemize}
+      \item Prove that Bakery Algorithm is deadlock-free
+      \item Prove that Bakery Algorithm is first-come-first-served
+      \item Prove that Bakery Algorithm satisfies mutual exclusion
+    \end{itemize}
+\end{homeworkmail}
 
 Key insights: 
 \begin{itemize}
-  \item sort events by lexicographic order and prove it is consistent with \textit{precedence}
+  \item \textit{doorway} section
+  \item \textit{waiting} section
+  \item \textiti{first-come-first-served} ($D_{A}^{j} \rightarrow D_{B}^{k}$ then $CS_{A}^{j} \rightarrow CS_{B}^{k}$)
+  \item monotonically growing labels for operations
+  \item proving fairness
 \end{itemize}
+
+%Supplementary materials:
+%\begin{itemize}
+    %\item slides 95-118 from \texttt{chapter\_02.ppt}
+    %\item Section 2.5 ''Fairness'' and Section 2.6 ''Lamport`s Bakery Algorithm'' (pages 31 - 33)
+%\end{itemize}
 
 \end{frame}
 
-\section{Atomic snapshots}
+
+\subsection{Mutual exclusion beyond read-write memory cells}
+\showTOCSub
+
+\begin{frame}[fragile]{Mutual exclusion using read/write locations}
+
+\begin{itemize}
+  \item Correct, starvation-free algorithm exists (filter lock)
+  \item Correct, starvation-free and fair algorithm exists (bakery algorithm)
+  \item Any correct algorithm will require at least $N$ registers with read and write operations
+\end{itemize}
+
+\pause
+We could classify registers by allowed concurrency:
+\begin{itemize}
+  \item Single Reader Single Writer (SRSW)
+  \item Multiple Reader Single Writer (MRSW)
+  \item Multiple Reader Multiple Writer (MRMW)
+\end{itemize}
+
+\pause
+We could classify registers by capacity:
+\begin{itemize}
+  \item Boolean register ($true/false$), Integer register ($0, 1, ..., 2^N$)
+\end{itemize}
+
+\pause
+We could classify registers by supported operations:
+\begin{itemize}
+  \item Read-only, Write-once, Monotonically increasing, Arbitrary update
+  \pause
+  \item Atomic read-modify-write operations
+\end{itemize}
+
+\pause
+
+Before diving into classifications (Lecture~\foundationsPlusNum, Lecture~\atomicsNum), let`s study few more mathematical instruments.
+
+\end{frame}
+
+
+%\begin{frame}[fragile]{Before the final test}
+%
+%When you finish all lectures of second block, you will know many advanced concepts:
+%\begin{itemize}
+%  \item Concurrent object consistency definitions
+%  \item Register constructions
+%  \item Atomic snapshots
+%  \item Consensus number
+%\end{itemize}
+%
+%Revise all the correctness proofs from this lecture and be ready to answer some tricky questions:
+%\begin{itemize}
+%  \item In order to prove correctness of Peterson`s algorithm, should we use MRSW or MRMW register?
+  %\item In order to prove correctness of mutual exclusion primitives, should we require all registers to be linearizable or weaker guarantees will fit?
+%  \item Could you adapt \texttt{FilterLock} to allow dynamic thread creation and deletion?
+%\end{itemize}
+%
+%\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Concurrent objects}
 \showTOC
 
-\begin{frame}{Atomic snapshot}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snapshot1.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Atomic snapshot}
-
-Array of MRSW atomic registers (1 register per thread)
-\begin{itemize}
-  \item Take instantaneous snapshot of all
-  \item Generalizes to MRMW registers
-\end{itemize}
-
-\pause
-
-\begin{minted}{java}
-interface Snapshot<T> {
-  // Thread.currentThread writes `v` to its own register (arr[Thread.id] = v)
-  public void update(T v);
-  // Instantaneous snapshot of all threads’ registers (return copy(arr))
-  public T[] scan();
-}
-\end{minted}
-
-\pause
-
-Collect
-\begin{itemize}
-  \item Read values one at a time
-\end{itemize}
-
-Problem
-\begin{itemize}
-  \item Incompatible concurrent collects
-  \item Result not linearizable
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Clean collect}
-
-Clean Collect
-\begin{itemize}
-  \item Collect during which nothing changed
-\end{itemize}
-
-\pause
-
-Challenge
-\begin{itemize}
-  \item Can we make it happen?
-  \item Can we detect it?
-\end{itemize}
-
-\pause
-Simple snapshot:
-\begin{itemize}
-  \item \only<1-3>{Put increasing labels on each entry} \only<4->{\textbf{Put increasing labels on each entry (why?)}}
-  \item Collect twice
-  \item If both agree -- we are done
-  \item Otherwise -- try again
-\end{itemize}
-
-\pause
-\pause
-Problem: Scanner might not be collecting a snapshot!
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Clean collect: must use labels}
-
-\only<1>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snap-label/lbl1.png}
-\end{center}
-}
-
-\only<2>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snap-label/lbl2.png}
-\end{center}
-}
-
-\only<3>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snap-label/lbl3.png}
-\end{center}
-}
-
-\only<4>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snap-label/lbl4.png}
-\end{center}
-}
-
-\only<5>{
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/snap-label/lbl5.png}
-\end{center}
-}
-\end{frame}
-
-
-\begin{frame}[fragile]{ABA: first encounter}
-
-We had a subtle concurrent problem:
-\begin{itemize}
- \item Thread 1 reads some data (''current state of system'', e.g. \texttt{queue.length == 2}), denote \textbf{A}
- \item Thread 2 changes system state to \textbf{B} (e.g. \texttt{queue.enq})
- \item Thread 3 changes system state back to \textbf{A} (e.g. \texttt{queue.deq})
- \item Thread 1 reads system state again
-\end{itemize}
-
-\pause
-
-Thread 1 thinks "nothing happened with the system" \ (e.g. no new data arrived) which is \textbf{incorrect}.
-
-\pause
-
-This is called ABA problem. One of the most complicated issues with non-blocking algorithms.
-
-\pause
-
-Timestamping helps to solve it. \pause But what if your timestamp (\texttt{int} counter) overflow and wrap? 
-
-\pause
-"The Art of Multiprocessor Programming" \ section 2.7 "Bounded Timestamps" \pause
-
-... or just use \texttt{long} counters ;)
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Simple snapshot}
-
-\begin{minted}{java}
-private AtomicMRSWRegister[] register; // reg[i] belongs to i-th Thread
-public void update(T value) {
-  var i = ThreadID.get(); var oldValue = register[i].read();  
-  register[i].write(new LabeledValue(oldValue.label + 1, value)); 
-}
-private LabeledValue[] collect() {
-  var copy = new LabeledValue[n];
-  for (int j = 0; j < n; j++) copy[j] = register[j].read();
-  return copy; 
-}
-public T[] scan(){ var oldCopy = collect();
-  while (true) {   var newCopy = collect(); // <-----------------------------+
-                   if (equals(oldCopy, newCopy)) return getValues(newCopy);//|
-                   oldCopy = newCopy; // ------------------------------------+    
-  }}
-\end{minted}
-\end{frame}
-
-
-\begin{frame}[fragile]{Simple snapshot}
-
-\begin{itemize}
-  \item Linearizable
-  \item Update is wait-free
-  \begin{itemize}
-    \item No unbounded loops
-  \end{itemize}
-  \item But Scan can starve \only<2->{(\textbf{Obstruction-free})}
-  \begin{itemize}
-    \item If interrupted by concurrent update
-  \end{itemize}
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Critical task №2: medium}
-
-\begin{homeworkcritical}
-  \begin{itemize}
-    \item Finish "Easy" \ level.
-    \item  Prove that "Simple snapshot" \ algorithm is correct, wait-free for \texttt{update()} and obstruction-free for \texttt{scan()}.
-           Use Section 4.3.1 "An Obstruction-Free Snapshot".
-    \item \textbf{Note:} algorithm uses stamped values, be ready to explain how it works in wait-free setting
-  \end{itemize}
-\end{homeworkcritical}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Critical task №2: hard}
-
-\begin{homeworkcritical}
-  \begin{itemize}
-    \item Finish "Medium" \ level.    
-    \item Solve exercise 41 from Section 4.5.
-  \end{itemize}
-\end{homeworkcritical}
-\end{frame}
-
-\begin{frame}[fragile,noframenumbering]{Critical task №2: hard}
-
-\textbf{Exercise 41}. There are $n$ processors $P_0$, ... , $P_{n-1}$ arranged in a ring, where $P_i$ can send messages only to $P_{i+1 \ mod \ n}$.
-Messages are delivered in FIFO order along each link. Each processor keeps a copy of the shared register. To read a register, the processor reads the copy in its local memory.
-
-\begin{itemize}
-  \item A processor $P_i$ starts a \texttt{write()} call of value $v$ to register $x$ by sending the message \ \ \ \ \ \ \ \texttt{“$P_i$: write v to x”} to $P_{i+1 \ mod \ n}$.
-  \item If $P_i$ receives a message \texttt{“$P_j$: write v to x”} for $i \neq j$, then it writes $v$ to its local copy of $x$, and forwards the message to $P_{i+1 \ mod\  n}$.
-  \item If $P_i$ receives a message \texttt{“$P_i$: write v to x”} then it writes $v$ to its local copy of $x$, and discards the message. The \texttt{write()} call is now complete.
-\end{itemize}
-
-Give a short justification or counterexample.
-If \texttt{write()} calls never overlap,
-\begin{itemize}
-  \item Is this register implementation regular?
-  \item Is it atomic?
-\end{itemize}
-
-If multiple processors call \texttt{write()},
-\begin{itemize}
-  \item Is this register implementation safe?
-\end{itemize}
-
-
-\end{frame}
-
-\begin{frame}{Atomic snapshot: wait free}
-
-We need progress even if other threads update data
-\begin{itemize}
-  \pause
-  \item Every scanner does scan (as before)
-  \pause
-  \item Every updater does scan  (\textit{helping hand})
-  \pause
-  \item In case of conflicts scanner could reuse scan from updater
-\end{itemize}
-\pause
-Good luck to prove
-\begin{itemize}
-  \item Reused value is consistent (resulting snapshot is linearizable)
-  \item Appropriate reused value always exists (wait-freedom for every concurrent scenario)
-  \item Stealing of value is correct
-\end{itemize}
-
-\pause
-Optional homework: Section 4.3.2 "A Wait-Free Snapshot" \  and Section 4.3.3 "Correctness Arguments" \ (pages 88-93)
-
-\end{frame}
-
-
-\begin{frame}{Register constructions: summary}
-
-Safe Single-Reader Single-Writer Boolean register could
-\begin{itemize}
-  \item implement other registers, up to Atomic MRMW Integer registers
-  \item provide a consistent atomic snapshot of $N$ registers
-\end{itemize}
-using wait-free algorithms
-
-\pause
-What is the next step to attempt with read-write registers? 
-\pause
-\begin{itemize}
-  \item Snapshot means
-  \begin{itemize}
-    \item Write any one array element
-    \item Read multiple array elements
-  \end{itemize}
-  \pause
-  \item What about atomic writes to multiple locations?
-\end{itemize}
-\end{frame}
-
-\section{Consensus number}
-\showTOC
+\subsection{Sequential and concurrent objects}
 
 \begin{frame}{Motivation}
 
-Why do we use mutual exclusion or other communication protocol?
+We need to formalize
+\begin{itemize}
+  \item Safety (correctness)
+  \item Liveness (progress)
+\end{itemize}
 
 \pause
 
+for concurrent data structures and concurrent algorithms.
+
+\pause
 \begin{itemize}
-  \item For thread coordination
-  \pause
-  \item Ensure system evolves according to some rules
-  \pause
-  \item Threads decide what to do together
+  \item How to define safety and liveness "universally"?
+  \item How to reason about whole programs / software components in isolation?
+  \item How to compose modules and correctness proofs?
+  \item Are there "better" \ or "simpler" \ approaches?
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}{Concurrent objects}
+
+Goals:
+\begin{itemize}
+  \item \textbf{Describe} object
+  \item \textbf{Implement} object
+  \item \textbf{Check} for errors
+\end{itemize}
+
+\pause
+\textbf{Check} that \textbf{implementation} conforms to \textbf{specification}.
+
+\pause
+Let's focus on descriptions: \pause
+\begin{itemize}
+  \item when implementation is \textbf{correct}
+  \item the conditions under which it guarantees \textbf{progress}
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}{Each thread has private input}
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons1.png}
-\end{center}
-\end{frame}
+\begin{frame}[t]{Sequential objects and specifications}
 
-\begin{frame}[noframenumbering]{They communicate}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons2.png}
-\end{center}
-
-\end{frame}
-
-\begin{frame}[noframenumbering]{They agree on some input}
-
-\begin{center}
-  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons3.png}
-\end{center}
-\end{frame}
-
-
-\begin{frame}{Consensus}
-
+Sequential object:
 \begin{itemize}
-  \item \textbf{Consistent}: all threads decide the same value
-  \item \textbf{Valid}: the common decision value is some thread's input
+  \item State -- set of fields
+  \item Methods -- the only way to change state  
 \end{itemize}
 
-\pause
+\pause 
 
-\begin{theorem}
-  There is no wait-free implementation of n-thread consensus from read-write registers
-\end{theorem}
-
-\pause
-
-Implication:
+Sequential specification:
 \begin{itemize}
-  \item Asynchronous computability different from Turing computability
-\end{itemize}
-
-\pause
-
-Read-write registers formalized in terms of safe/regular/atomic concurrent objects.
-
-\pause
-
-Theorem could be adapted to:
-
-\begin{itemize}
-  \item Registers
-  \item Message-passing
-  \item Carrier pigeons
-  \item Any kind of asynchronous computation
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Consensus: why?}
-
-\begin{itemize}
-  \item \textbf{Consistent}: all threads decide the same value
-  \item \textbf{Valid}: the common decision value is some thread's input
-\end{itemize}
-
-\begin{theorem}
-  There is no wait-free implementation of n-thread consensus from read-write registers
-\end{theorem}
-
-\pause
-Theorem helps to prove fun stuff, e.g. 
-\begin{itemize}
-  \item it is impossible to implement a two-dequeuer wait-free FIFO queue
-  \item from read/write memory
-\end{itemize}
-
-\pause
-
-Let's classify all concurrent objects by their "synchronization power"
-
-\end{frame}
-
-\begin{frame}{Consensus number}
-
-An object \textbf{X} has \textit{consensus number} \textbf{n}
-\begin{itemize}
-  \item If it can be used to solve \textbf{n}-thread consensus
+  \item If (\textbf{precondition}) 
   \begin{itemize}
-    \item Take any number of instances of \textbf{X} 
-    \item together with atomic read/write registers
-    \item and implement \textbf{n}-thread consensus
+    \item the object is in such-and-such a state
+    \item before you call the method
   \end{itemize}
-  \item But not \textbf{(n+1)}-thread consensus
+
+  \item Then (\textbf{postcondition})
+  \begin{itemize}
+    \item the method will return a particular value
+    \item or throw a particular exception
+  \end{itemize}
+
+  \item and (\textbf{postcondition})
+  \begin{itemize}
+    \item the object will be in some other state
+    \item when the method returns
+  \end{itemize}
 \end{itemize}
+\end{frame}
 
-\pause
+\begin{frame}[t]{Sequential specifications}
 
-\begin{theorem}
-  Atomic read/write registers have consensus number 1
-\end{theorem}
-
-Atomic registers cannot implement multiple assignment
 \begin{itemize}
-  \item Single write/multi read OK
-  \item Multi write/multi read impossible
+  \item Interactions among methods captured by side-effects on object state
+  \begin{itemize}
+    \item State meaningful between method calls    
+  \end{itemize}
+
+  \item Documentation size linear in number of methods
+  \begin{itemize}
+    \item Each method described in isolation
+  \end{itemize}
+
+  \item Can add new methods
+  \begin{itemize}
+    \item Without changing descriptions of old methods
+  \end{itemize}
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}{Consensus number}
+\begin{frame}{Sequential vs concurrent}
 
-\begin{theorem}
-  Atomic read/write registers have consensus number 1
-\end{theorem}
-
-Atomic registers cannot implement \only<2->{\textbf{wait-free}} multiple assignment
+Key difference (concurrency):
 \begin{itemize}
-  \item Single write/multi read OK
-  \item Multi write/multi read impossible
+    \item Method call is not an event
+    \item Method call is an interval
 \end{itemize}
 
 \pause
+Implications:
+\pause
+\begin{itemize}
+  \item method calls could overlap, object might never be between method calls
+  \begin{itemize}
+    \pause
+    \item in sequential specification we need to only define object state between method calls
+  \end{itemize}
+  \pause
+
+  \item must characterize all possible interactions with concurrent calls 
+  \begin{itemize}
+    \pause
+    \item in sequential specification we described methods in isolation
+  \end{itemize}
+
+  \pause
+
+  \item everything can potentially interact with everything else
+  \begin{itemize}
+    \pause
+    \item in sequential specification we could add new methods without affecting older methods
+  \end{itemize}
+\end{itemize}
+
+\pause
+\begin{tikzpicture}[remember picture,overlay]
+\node[xshift=2cm,yshift=-2.0cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/fry-pain-head.png}};
+\end{tikzpicture}
+
+\end{frame}
+
+
+\subsection{Intuition behind consistency definitions}
+\showTOCSub
+
+\begin{frame}[t]{Consistency}
+
+What does it \textbf{mean} for a \textit{concurrent} object to be correct?
+\begin{itemize}
+  \item What is a concurrent FIFO queue?
+  \pause
+  \item FIFO means strict temporal order
+  \item Concurrent means ambiguous temporal order
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile, noframenumbering]{Consistency}
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/conc-obj/seq-idea.png}
+\end{center}
+\end{frame}
+
+\begin{frame}[t]{Linearizability}
+
+Each method should
+\begin{itemize}
+  \item “take effect”
+  \item instantaneously
+  \item between invocation and response events
+\end{itemize}
+
 \pause
 
-\begin{theorem}
-Multi-dequeuer FIFO queues have consensus number at least 2
-\end{theorem}
+Object is correct if this “sequential” behavior is correct
 
-Atomic registers cannot implement highly concurrent wait-free FIFO
+\pause
+Any such concurrent object is \textbf{Linearizable}
+
+\pause
+Sounds like a property of an execution ...
+
+\pause
+
+A \textbf{linearizable object}: one all of whose possible executions are linearizable
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/58.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/59.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/60.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/61.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/62.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/63.png} \end{center}
+\end{frame}
+
+
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/65.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/66.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/67.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/68.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/69.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/70.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/71.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/72.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/73.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/74.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/75.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/76.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/77.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/78.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/79.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/80.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/81.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/82.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/83.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/84.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/85.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/86.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/87.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/88.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/89.png} \end{center}
+\end{frame}
+
+\begin{frame}[fragile,noframenumbering]{Examples}
+\begin{center} \includegraphics[width=0.7\textwidth]{./pics/linear/90.png} \end{center}
+\end{frame}
+
+
+\begin{frame}{Linearizability: summary}
+
+Each method should
 \begin{itemize}
-  \item it is impossible to implement a two-dequeuer wait-free FIFO queue
-  \item from read/write memory
+  \item ''take effect''
+  \item instantaneously
+  \item between invocation and response events
+\end{itemize}
+
+Linearization point: when method ''commit changes to object state''
+\begin{itemize}
+  \item Could be different code points for different executions!
+\end{itemize}
+
+Linearizability
+\begin{itemize}
+ \item requires to analyze executions, not just methods
+ \item compositional -- result of composing linearizable objects is linearizable\footnote{Optional homework: Theorem 3.6.1 in "The Art of Multiprocessor Programming"}
 \end{itemize}
 
 \end{frame}
 
-\begin{frame}{Consensus numbers measure synchronization power}
 
-\begin{theorem}
+\begin{frame}[fragile]{Linearizability is not the only one}
+
+There exists:
 \begin{itemize}
-  \item If you can implement \textbf{X} from \textbf{Y}
-  \item And \textbf{X} has consensus number \textbf{c}
-  \item Then \textbf{Y} has consensus number at least \textbf{c}
+  \pause
+  \item Sequential consistency
+  \begin{itemize}
+    \item Provides other guarantees, harder to reason (no linearization points)
+    \item \textbf{Not} compositional
+    \item Hardware designers love to use weaker variations of it (Lecture~\cacheCoherencyNum \ will be hard)    
+  \end{itemize}
+
+  \pause
+  \item Quiescent consistency
+  \begin{itemize}
+    \item One of the weakest (yet understandable) consistencies
+    \item Compositional
+    \item Complicated performance-oriented concurrent data structures may use it to formalize possible and impossible results
+  \end{itemize}
 \end{itemize}
-\end{theorem}
 
 \pause
 
-Registers have consensus number \textbf{1}
-
-\pause
-
-There are practically interesting problems that require higher consensus number
-
-\pause
-
-What should we do next?
+Linearizability is useful yet could be not applicable (by design\footnote<4->{\tiny{RCU: advantages and disadvantages \url{https://en.wikipedia.org/wiki/Read-copy-update}}} or by implementation\footnote<4->{\tiny{ConcurrentLinkedDeque is non-linearizable \url{https://bugs.openjdk.org/browse/JDK-8256833}}})
 
 \end{frame}
 
-% \subsection{Atomic registers}
-% 
-% 
-% \begin{frame}{Uni and bivalent states, critical state}
-% 
-% Theorem 
-% There is no wait-free implementation of n-thread consensus from read-write registers
-% Implication
-% Asynchronous computability different from Turing computability
-% 
-% provibg easy case 38 - 91
-% 
-% \end{frame}
-% 
-% \begin{frame}{Atomic regs consensus 1}
-% 
-% Proof
-% \end{frame}
-% 
-% 
-% \begin{frame}{Astonishing practical result}
-% 
-% super-duper atomic read writes are NOT enough to impl cool lock-free/wait-free data structures
-% 
-% but what we could do fix fix limits 
- % - (2 threads? 3threads?)
- % - several atomic assignment?
-% 
-% we need something more strong (and hw engineers need to provide it)
- % - but which operations do we need?
-% \end{frame}
-% 
-% 
-% 
-% \begin{frame}{Consensus for atomic registers: summary}
-% 
-% An object X has consensus number n
-% If it can be used to solve n-thread consensus
-% Take any number of instances of X 
-% together with atomic read/write registers
-% and implement n-thread consensus
-% But not (n+1)-thread consensus
-% 
-% Theorem
-% Atomic read/write registers have consensus number 1
-% Theorem
-% Multi-dequeuer FIFO queues have consensus number at least 2
-% 
-% \end{frame}
-% 
-% 
-% \begin{frame}{Interesting facts: theory, no proof}
-% 
-% FIFO consensus
-% (m, n) assignment consensus
-% 
-% TODO: show how to prove impossibility of mukti-write/multi-read using consusnsus!
-% 
-% 
-% \end{frame}
-% 
-% 
-% \subsection{Read-Modify-Write Operations (Common2)}
-% 
-% \begin{frame}{Interesting facts: hw, no proof}
-% 
-% Common2 ops, consensus number is exaclty 2, page 115 informal explanation
-% 
-% Conclusion: h/w getAndIncrement is not enough for consensus, we need something more elaborate
-% 
-% Remark: reminder that consensus is about wait freedom, you could develop a blocking mutex on getAndIncrement or some other stuff which is al least obstruction-free
-% 
-% \end{frame}
-% 
-% 
-% \subsection{CompareAndSet}
-% 
-% \begin{frame}{CompareAndSwap CompareAndSet CompareAndExchange}
-% 
-% we have definition mess
-% 
-% java util concurrent
-% c++
-% papers/books
-% 
-% and variations of ret value, but they are trivially equivalent (theoretically, not practically TODO: JDK fro mshipilev about canhe beh, LEc-TODO)
-% 
-% 
-% !!! CAS is infinirte consensus number
-% 
-% h/w enginers are relaxed now
-% 
-% \end{frame}
 
+\begin{frame}[fragile]{Intuition behind consistency definitions: takeaways}
+
+\begin{itemize}
+  \item \textbf{Describe} object first, then implement and test it
+  \item Sequential specifications totally rock
+  \begin{itemize}
+    \item Easy to understand and document
+    \item Modular and extensible
+  \end{itemize}
+
+  \item Concurrent methods are not instantaneous and could overlap
+\end{itemize}
+
+\pause
+
+Solution 0: use locks and sequential specifications
+
+\pause
+
+Solution 1: mimic to sequential specification
+\begin{itemize}
+  \item Points in code where method ''commited changes'': linearization points
+  \item Every concurrent execution have order among object-specific operations: linearizable object
+  \item Provide specifications based on linearizability
+\end{itemize}
+
+\pause
+
+Solution 2: use more fragile and complicated consistency definitions
+
+\begin{itemize}
+  \pause \item Remember to check if your approach is compositional
+\end{itemize}
+
+\end{frame}
+
+\subsection{Optional: formal definitions and composability}
+\showTOCSub
+
+\begin{frame}{Formal definitions}
+
+\textbf{Additional material}
+\begin{itemize}
+  \item There will be no questions related to this topic on final exam
+  \item No homework related to this questions
+  \item I would be glad to answer your questions if you brave enough to dive in 
+\end{itemize}
+
+Information for keen readers:
+\begin{itemize}
+  \item Slides 95-176 from \texttt{chapter\_03.ppt}
+  \item Chapter 3 ''Concurrent Objects'' up to section 3.6 ''Formal Definitions'' (pages 45 - 58)
+\end{itemize}
+
+Key insights: 
+\begin{itemize}
+  \item quiescent consistency
+  \item sequential consistency
+  \item linearizability
+  \item formal definitions: history, projections
+  \item compositional linearizability
+  \item nonblocking property
+\end{itemize}
+
+\end{frame}
 
 \section{Summary}
 
 \begin{frame}{Summary}
 
-Progress conditions
+First steps towards formalization of concurrent execution
 \begin{itemize}
-  \item Dependent progress: Deadlock-freedom, Starvation-freedom
-  \item Non-blocking progress: Lock-freedom, Wait-freedom
-  \item Dependent non-blocking progress: Obstruction-freedom
+  \item Timeline, Event, Interval, Precedence
 \end{itemize}
 
-Register design space
+Rigorously prove mutual exclusion properties:
 \begin{itemize}
-  \item Capacity, Concurrency (SRSW, MRMW, MRMR), Consistency (safe, regular, atomic)
-  \item Atomic snapshot
+  \item Mutual exclusion, Deadlock-freedom, Starvation-freedom
 \end{itemize}
 
-Wait-free constructions using
+Non-trivial results for mutual exclusion
 \begin{itemize}
-  \item Timestamps, Helping/Cooperation, Decomposition 
+  \item Peterson`s algorithm
+  \item FilterLock
+  \item Lower bounds on the number of locations
 \end{itemize}
 
-New problems specific to non-blocking designs
+Formalizing allowed behaviour of concurrent object:
 \begin{itemize}
-  \item Global clock, ABA
+  \item Sequential object, sequential specification
+  \item Concurrent object, consistency
+  \item Linearizability, linearization points
+  \item Non-linearizable executions
 \end{itemize}
-
-Consensus number as a tool to formalize relative synchronization power
-
-% 
-% we tried to assess different definitions and progress guarantees
-% 
-% but major focus was on wait-freedom
-% because it is theoretically intersting and allows to "push the limits"
-% 
-% in reality we see that
-% locking (no progress), obstr-free/lock-free/wait-free
-% are growing complecxity and (usually) decresing performance (throughput) and even latency (because real world not only about upper bound but also about 99 percentile)
-% 
-% so do not mix theory and practice
-% 
-% 
-% however all the key ideas: snapshotting, multi-value constructions, helping, re-check for clean view, RMW2 and CAS are all useful tools for reading/writing concurrent protocols
-% 
-% Further reading: uniersal consensu, book as a whole
-% 
-% more sophisticated and useful:
-% distributed systems (building protocols form weaker primitevs -- no deliverey guarantee, no order guarantee), still need consensus:
-  % devops/kubernetes/lxc
-  % load balancing
-  % datagrids
-  % supercomputer data topology
-  % ...
-
 \end{frame}
 
 \begin{frame}{Summary: homework}
-
-\begin{homeworkcritical}
-  \textbf{Easy}. Prove that Regular MRSW Integer construction is correct and wait-free.
-  Use Section 4.2.3 "A Regular M-Valued MRSW Register"
-\end{homeworkcritical}
-
-\begin{homeworkcritical}
-  \textbf{Medium}.
-  \begin{itemize}      
-    \item  Prove that "Simple snapshot" \ algorithm is correct, wait-free for \texttt{update()} and obstruction-free for \texttt{scan()}.
-           Use Section 4.3.1 "An Obstruction-Free Snapshot".
-    \item \textbf{Note:} algorithm uses stamped values, be ready to explain how it works in wait-free setting
-  \end{itemize}
-\end{homeworkcritical}
-
-\begin{homeworkcritical}
-  \textbf{Hard}. Solve exercise 41 from Section 4.5.
-\end{homeworkcritical}
-
+    \texttt{Lecture 7, Tasks 7.*:} {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block2}}
 \end{frame}
 
 \end{document}
