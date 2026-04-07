@@ -2,7 +2,11 @@
 
 ## Description
 
-Assume we have a (possibly infinite) set of events `x1, x2, x3 ...`. Those events are totally ordered, i.e. for every two different events `x` and `y` (`x != y`) either `x -> y` or `y -> x`. We define an interval `X` as a pair of two events `(x1, x2)` where `x1 -> x2`.
+Assume we have a (possibly infinite) set of events `x1, x2, x3 ...`. Those events are totally ordered via `->` that is a [strict total order](https://en.wikipedia.org/wiki/Total_order). For every `x`, `y`, `z`
+- Not `x -> x` (irreflexive)
+- If `x -> y` then not `y -> x` (asymmetric)
+- If `x -> y` and `y -> z` then `x -> z` (transitive)
+- If `x != y` then `x -> y` or `y -> x` (connected)
 
 **Side note**: usually partial orders defined via binary relation denoted as `<` but here we use symbol `->`.
 
@@ -25,7 +29,7 @@ Prove that `->` (precedence) binary relation on intervals is a partial order tha
 - Antisymmetric. If `X -> Y` then not true `Y -> X`.
 - Transitive. If `X -> Y` and `Y -> Z` then `X -> Z`.
 
-Please also prove that precedence is indeed a partial order: provide an example where `X -> Y` false and `Y -> X` is also false.
+Please also prove that precedence is indeed a partial order: provide an example with `X != Y` where `X -> Y` false and `Y -> X` is also false.
 
 ## Requirements
 
