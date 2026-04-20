@@ -2,7 +2,7 @@
 
 ## Description
 
-Implement reentrant test-and-set lock using `java.util.concurrent.AtomicReference` and `Thread.currentThread`.
+Implement reentrant test-and-set lock using `java.util.concurrent.AtomicStampedReference` and `Thread.currentThread`.
 Provide at least 3 tests written in JCStress.
 
 ## Requirements
