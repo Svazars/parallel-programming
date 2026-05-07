@@ -1,87 +1,52 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
-\title[]{Lecture \cacheCoherencyNum: \cacheCoherencyTopic}
-\subtitle[]{\cacheCoherencyKey}
+\newcommand{\thisLectureNum}{\atomicsNum}
 
+\title[]{Lecture \thisLectureNum: \atomicsTopic}
+\subtitle[]{\atomicsKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
+
 \date{}
 
 \begin{document}
 
 \begin{frame}
   \titlepage
-  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l9.pdf}
+  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l\thisLectureNum.pdf}
 \end{frame}
 
 
 \begin{frame}{In previous episodes}
 
-Concurrency domain
-\begin{itemize}
- \item Communicating agents (threads)
- \item Different speed of execution and non-deterministic interleavings (OS scheduler)
- \item Problems with proper synchronization -- race conditions, deadlocks
- \item Key properties: Safety (correctness), Liveness (progress), Performance
-\end{itemize}
-
 Formalization of concurrent execution
 \begin{itemize}
- \item Timeline, Events, Intervals, Precedence
- \item Consistency, Linearizability, Linearization points
- \item Progress conditions: wait-free, lock-free, obstruction-free, starvation-free, deadlock-free
- \item Atomic register, Snapshot, Consensus number
+  \item Timeline, Event, Interval, Precedence
 \end{itemize}
 
-Practical aspects
+Concurrent objects
 \begin{itemize}
- \item Read-Modify-Write operations
- \item Memory bus, Cache hierarchy, Cache coherence
- \item Lock-free algorithms and ABA problem
+  \item Sequential object, Sequential specification, Linearizability, Linearization points
 \end{itemize}
-\end{frame}
 
-\begin{frame}{Warning: lecture today is going to be like}
+Progress conditions
+\begin{itemize}
+  \item Dependent progress: Deadlock-freedom, Starvation-freedom
+  \item Non-blocking progress: Lock-freedom, Wait-freedom
+  \item Dependent non-blocking progress: Obstruction-freedom
+\end{itemize}
+
+Register design space
+\begin{itemize}
+  \item Bool/Int, SRSW/MRSW/MRMW, Safe/Regular/Atomic
+  \item Atomic snapshot
+\end{itemize}
 
 \pause
 
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4cm,yshift=1cm] at (current page.center) {\includegraphics[width=0.4\textwidth]{./pics/lambo.png}};
-\end{tikzpicture}
+It was quite intensive material about \textbf{theory and foundations} of concurrency.
 
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=-5cm,yshift=-0cm] at (current page.center) {\includegraphics[width=0.3\textwidth]{./pics/oca.png}};
-\end{tikzpicture}
-
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=1cm,yshift=-2cm] at (current page.center) {\includegraphics[width=0.3\textwidth]{./pics/prof.png}};
-\end{tikzpicture}
-
-\end{frame}
-
-\begin{frame}{Supplementary materials}
-
-Unconditional benefit
-\begin{itemize}
-  \item "Memory Barriers: a Hardware View for Software Hackers"\footnote{\tiny\url{https://www.researchgate.net/publication/228824849_Memory_Barriers_a_Hardware_View_for_Software_Hackers}}
-  \item "What Every Programmer Should Know About Memory"\footnote{\tiny\url{https://people.freebsd.org/~lstewart/articles/cpumemory.pdf}}
-  \item "Слабые модели памяти: буферизации записи на x86"\footnote{\tiny\url{https://habr.com/ru/companies/JetBrains-education/articles/523298}}
-\end{itemize}
-
-Advanced material
-\begin{itemize}
-  \item "A Tutorial Introduction to the ARM and POWER Relaxed Memory Models"\footnote{\tiny\url{https://www.cl.cam.ac.uk/~pes20/ppc-supplemental/test7.pdf}}
-  \item "Shared Memory Consistency Models: A Tutorial"\footnote{\tiny\url{https://dl.acm.org/doi/10.1109/2.546611}}
-\end{itemize}
-
-Mechanical sympathy (better understand h/w design):
-\begin{itemize}
-  \item "Digital Design and Computer Architecture" \ by David Money Harris, Sarah L. Harris\footnote{\tiny\url{https://www.amazon.com/Digital-Design-Computer-Architecture-Harris/dp/0123944244}}
-\end{itemize}
+\pause Let's switch to practical aspects.
 
 \end{frame}
 
@@ -90,1399 +55,1473 @@ Mechanical sympathy (better understand h/w design):
 \tableofcontents
 \end{frame}
 
+\section{Consensus}
 
-\section{Preliminary discussion}
+\begin{frame}{Each thread has private input}
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons1.png}
+\end{center}
+\end{frame}
 
-
-\begin{frame}{Global memory: 1 CPU}
+\begin{frame}[noframenumbering]{They communicate}
 
 \begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/1.png}
+  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons2.png}
 \end{center}
 
 \end{frame}
 
-\begin{frame}[t]{Global memory: 2 CPU}
+\begin{frame}[noframenumbering]{They agree on some input}
 
 \begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/2.png}
+  \includegraphics[width=0.5\textwidth]{./pics/consensus/cons3.png}
 \end{center}
-
-\pause
-
-Any problem here?
-
-\end{frame}
-
-\begin{frame}[t,noframenumbering]{Global memory: 2 CPU}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/3.png}
-\end{center}
-
-\pause
-
-Any problem here?
-
 \end{frame}
 
 
-
-\begin{frame}[t]{Global memory: fine-grained locking}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/4.png}
-\end{center}
-
-\pause
-
-Cache line
-\begin{itemize}
-    \item contiguous chunk of memory (e.g 64, 128, 256 bytes)
-    \item auxiliary data associated with the chunk
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t, noframenumbering]{Global memory: fine-grained locking}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/4.png}
-\end{center}
-
-
-What is optimal cache line size?
-
-\pause
-\begin{itemize}
-    \item too large -- \textbf{false sharing} (access to independent data cause performance loss)
-    \item too small -- overhead for storing meta information
-\end{itemize}    
-
-\end{frame}
-
-
-\begin{frame}[t, noframenumbering]{Global memory: fine-grained locking}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/4.png}
-\end{center}
-
-Any problem here?
-
-\end{frame}
-
-
-\begin{frame}{Global memory: fine-grained locking for read-mostly data}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/5.png}
-\end{center}
-
-\pause
-
-Is it consistent?
-
-\end{frame}
-
-\begin{frame}{Global memory: fine-grained locking for read-mostly data}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/5.png}
-\end{center}
+\begin{frame}{Consensus}
 
 \begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
-\end{itemize}
-
-\pause
-What?
-
-\end{frame}
-
-\begin{frame}[t,fragile]{Coherency: CoRR1 sample}
-
-\begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
+  \item \textbf{Consistent}: all threads decide the same value
+  \item \textbf{Valid}: the common decision value is some thread's input
 \end{itemize}
 
 \pause
 
-Initial state: \texttt{x = 1}
-\begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}} 
- \begin{minted}[fontsize=\small]{c}
- void threadA() {
-       x = 2;   
- }
- \end{minted}
- &  
- \begin{minted}[fontsize=\small]{c}
- void threadB() {                                   
-     int r1 = x;                           
-     int r2 = x;                           
- }                    
- \end{minted}
-\end{tabular}
+\begin{theorem}
+  There is no wait-free implementation of n-thread consensus from read-write registers
+\end{theorem}
 
 \pause
-\texttt{Forbidden: r1 = 2, r2 = 1}
 
-\pause
-Several other executions of the same code are allowed: 
+Implication:
 \begin{itemize}
-    \item both Thread B reads could read 1
-    \item both Thread B reads could read 2
-    \item first could read 1 and the second 2
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Coherency: CoRR2 sample}
-
-\begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
+  \item Asynchronous computability different from Turing computability
 \end{itemize}
 
 \pause
 
-Initial state: \texttt{x = 0}
-\begin{tabular}{p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth}}
- \begin{minted}[fontsize=\small]{python}
- thread1
-   x = 1
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{python}
- thread2
-   x = 2
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread3
-  r1 = x
-  r2 = x 
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread4
-  r3 = x
-  r4 = x
- \end{minted}
- \end{tabular}
- 
+Read-write registers formalized in terms of safe/regular/atomic concurrent objects.
 
 \pause
-\texttt{Forbidden: r1 = 2, r2 = 1, r3 = 1, r4 = 2}
 
-\end{frame}
-
-
-\begin{frame}{Global memory: fine-grained locking for read-mostly data}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/5.png}
-\end{center}
+Theorem could be adapted to:
 
 \begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
-\end{itemize}
-
-\pause
-
-What about two locations?
-\pause
-\begin{itemize}
-    \item No ordering required, no linearizability assumed
-\end{itemize}
-
-\pause
-
-What?
-
-\end{frame}
-
-\begin{frame}[t,fragile]{Coherency is about single memory cell}
-
-\begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
-\end{itemize}
-
-\pause
-
-Initial state: \texttt{x = 1, y = 1}
-\begin{tabular}{p{0.3\textwidth} p{0.3\textwidth} p{0.3\textwidth}} 
- \begin{minted}[fontsize=\small]{c}
- void threadA() {
-       x = 2;   
-       y = 2;
- }
- \end{minted}
- &  
- \begin{minted}[fontsize=\small]{c}
- void threadB() {                                   
-     int r1 = x;                           
-     int r2 = y;                           
- }
- \end{minted}
- &
- \begin{minted}[fontsize=\small]{c}
- void threadC() {                                   
-     int r3 = y;                           
-     int r4 = x;                           
- }                   
- \end{minted}
-\end{tabular}
-
-\pause
-\texttt{Allowed: r1 = 2, r2 = 1, r3 = 2, r4 = 1}
-
-\pause
-\textbf{Important:}
-\begin{itemize}
-    \item "each location has single linear order of all writes" \ \textbf{does not imply} orders of independent locations are "aligned"
-    \pause
-    \item \textbf{Coherence} is weaker than linearizability
+  \item Registers
+  \item Message-passing
+  \item Carrier pigeons
+  \item Any kind of asynchronous computation
 \end{itemize}
 
 \end{frame}
 
-\begin{frame}[t,fragile]{Idea}
+\begin{frame}{Consensus number}
 
+An object \textbf{X} has \textit{consensus number} \textbf{n}
 \begin{itemize}
-    \item \textbf{Coherence} is weaker than linearizability
+  \item If it can be used to solve \textbf{n}-thread consensus
+  \begin{itemize}
+    \item Take any number of instances of \textbf{X} 
+    \item together with atomic read/write registers
+    \item and implement \textbf{n}-thread consensus
+  \end{itemize}
+  \item But not \textbf{(n+1)}-thread consensus
 \end{itemize}
 
 \pause
 
-Let's reorder independent memory operations to improve performance of the CPU!
+\begin{theorem}
+  Atomic read/write registers have consensus number 1
+\end{theorem}
 
-\pause
-Every single-threaded program will become faster!
-
-\pause
-Who cares that concurrent software will misbehave, right?
-
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Relaxing memory ordering guarantees}
-
-\begin{minted}{java}
-static int x, y;
-void foo() {
-  int r1 = x;
-  int r2 = y;
-}
-\end{minted}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile,noframenumbering]{Relaxing memory ordering guarantees}
-
-\begin{minted}{java}
-static int x, y;
-void foo() {
-  int r1 = memory.read(x);
-  int r2 = memory.read(y);
-}
-\end{minted}
-
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=0cm,yshift=-6.5cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/reorder1.png}};
-\end{tikzpicture}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile,noframenumbering]{Relaxing memory ordering guarantees}
-
-\begin{minted}{java}
-static int x, y;
-void foo() {
-  Future<int> r1 = memory.read(x);
-  Future<int> r2 = memory.read(y);
-}
-\end{minted}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile,noframenumbering]{Relaxing memory ordering guarantees}
-
-\begin{minted}{java}
-static int x, y;
-void foo() {
-  Future<int> r1 = memory.read(x);
-  Future<int> r2 = memory.read(y);
-  ...
-
-  use(r2.get());
-  ...
-  use(r1.get());
-}
-\end{minted}
-
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=3cm,yshift=-2.5cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/reorder2.png}};
-\end{tikzpicture}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile,noframenumbering]{Relaxing memory ordering guarantees}
-
-\begin{minted}{java}
-static int x, y;
-void foo() {
-  Future<int> r1 = memory.read(x);
-  Future<int> r2 = memory.read(y);
-  ...
-
-  use(r2.get());
-  ...
-  use(r1.get());
-}
-\end{minted}
-
+Atomic registers cannot implement\only<3->{\textbf{ wait-free}} multiple assignment
 \begin{itemize}
-    \item Improve efficiency and CPU utilization -- faster
-    \item Sacrifice consistency -- harder to reason about correctness
+  \item Single write/multi read \textcolor{green}{OK}
+  \item Multi write/multi read \textcolor{red}{impossible}
 \end{itemize}
 
 \end{frame}
 
+\begin{frame}[t]{Consensus numbers measure synchronization power}
 
-\begin{frame}{Implementing hardware memory: challenges}
-
+\begin{theorem}
 \begin{itemize}
-    \item Provide efficient and scalable hardware implementation of shared memory
-    \pause
-    \item Maintain consistency of single memory cell -- \textbf{coherency}
-    \pause
-    \item Allow to reorder operations on independent memory cells -- \textbf{relaxed memory model}
+  \item If you can implement \textbf{X} from \textbf{Y}
+  \item And \textbf{X} has consensus number \textbf{c}
+  \item Then \textbf{Y} has consensus number at least \textbf{c}
 \end{itemize}
+\end{theorem}
 
 \pause
-Our plan:
-\begin{itemize}
-    \pause
-    \item Look at simplified model: replication pattern for cache lines + MESI protocol
-    \pause
-    \item Improve it: Store buffering, Load buffering, Invalidate queue, Interconnect topology    
-    \pause
-    \item Repair multi-cell consistency using memory barriers
-    \pause
-    \item Empirically study concurrent behaviour of existing hardware via litmus tests
-\end{itemize}
+
+Registers have consensus number \textbf{1}
+
+\pause
+
+There are practically interesting problems that require higher consensus number
+
+\pause
+
+What should we do next?
 
 \end{frame}
 
-\section{Cache coherency}
+% \section{Q\&A}
+% \begin{frame}{Q\&A session}
+% 
+% here are examples, are they linearizable
+% 
+% are they correct
+% 
+% again example of non-composable correct stuff that is not correct
+% 
+% which register is the best
+% 
+% why snapshot is not consensus
+% 
+% why temstamping snapshot is not consensus
+% 
+% Theory: filer lock solves N-thread coordination
+% Theory: any N-thread coordination requires at lewast N atomic regs
+% Theory: atomic reg consensus number is 1
+% Contradiction?
+% 
+% \end{frame}
+
+% \begin{frame}{You know too much}
+% 
+% A lot of information subtly connected with each other.
+% 
+% A lot of therory results, focused on "useful" definition (linearizability, wait-free)
+% 
+% Real life loves locks, it is ok to have even not obstruction-free algorithm and we have a lot of primitives (atomic registers of no use)
+% 
+% So know we will talk about more deep practical aspects (this lecture: some basixcs, and next lecture about h/w stuff)
+% 
+% And again: it will be a lot of subtly conected stuff. You are expected to have questions, do homework and ask help from TAs! 
+% \end{frame}
+
+\section{Read-Modify-Write}
 \showTOC
 
-\begin{frame}{Why do we need caches?}
+\begin{frame}[fragile]{Read-Modify-Write Objects}
 
-\pause
-
-\begin{center}
-    \textbf{Nanoseconds and toilet paper show}
-\end{center}
-
-\pause
-
-\begin{center}
-   \url{https://travisdowns.github.io/blog/2020/07/06/concurrency-costs.html}
-
-   Level 2 (True Sharing)
-\end{center}
-
-
-\end{frame}
-
-
-\begin{frame}{Using caches}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/cache.png}
-\end{center}
-
-Replication pattern:
+Method call
 \begin{itemize}
-    \item Cache line copied to processor-local cache
-    \item Metadata associated with every replicated cache line -- state of cache line
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Homework: caches and associativity}
-
-Hardware caches are quite efficient and use hardware-supported N-way associativity
-
-"Is Parallel Programming Hard, And, If So, What Can You Do About It" \ (perfbook) 
-\begin{itemize}
-    \item Appendix B "Why Memory Barriers?" \ , section B.1 "Cache Structure"
-    \item perfbook.B.1
-\end{itemize}
-
-Be ready to draw and explain what is associative hardware cache.
-
-\end{frame}
-
-\begin{frame}{Distributed caching}
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/cache.png}
-\end{center}
-
-\begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
+  \item Returns previous value \textbf{x}
+  \item Replaces \textbf{x} with \texttt{mumble(\textbf{x})}
 \end{itemize}
 
 \pause
-
-How to implement that without locks? \pause And without Atomic MRMW registers? \pause Efficient?
-
-\end{frame}
-
-
-\begin{frame}{Cache coherency: MESI}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4cm,yshift=-6.5cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/MESI.png}};
-\end{tikzpicture}
-
-
-State machine:
-\begin{itemize}
-    \item \textbf{Modified}
-    \item \textbf{Exclusive}
-    \item \textbf{Shared}
-    \item \textbf{Invalid}
-\end{itemize}
-
-Message passing on some transitions:
-\begin{itemize}
-    \item asynchronous (fire and forget)
-    \item synchronous (cannot change state until confirmation received)
-\end{itemize}
-
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Cache coherency: message passing\footnote{perfbook.B.2.3.}}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=5cm,yshift=-7.5cm] at (current page.center) {\includegraphics[width=0.4\textwidth]{./pics/MESI.png}};
-\end{tikzpicture}
-
-
-\begin{tabular}{p{10cm}p{5cm}}
-
-\begin{itemize}
-    \item Transition \textbf{(k)}: CPU loads data in a cache line that was not in its cache. Send “read”, await “read response”.
-
-    \item Transition \textbf{(h)}: CPU realizes that it will soon need to write data in this cache line. Send “invalidate” message, await "invalidate acknowledge". 
-
-    \item Transition \textbf{(b)}: CPU writes to the cache line that it already had exclusive access to. Nothing to send/receive.
-
-    \item Transition \textbf{(c)}: CPU receives “read invalidate” message for a cache line that it has modified. The CPU must invalidate local copy, respond with “read response” and “invalidate acknowledge”.
-\end{itemize}
-
- &
- 
-\end{tabular}
-
-\end{frame}
-
-\begin{frame}{Homework: more complicated MESI protocol example}
-
-Homework: read perfbook.B.2.4. "MESI Protocol Example"
-
-\begin{center}
-    \includegraphics[width=0.5\textwidth]{./pics/mesi-sample.png}
-\end{center}
-
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Unnecessary stalls}
-
-\begin{tikzpicture}[remember picture,overlay]
-    \node[xshift=4.5cm,yshift=-7.5cm] at (current page.center) {\includegraphics[width=0.4\textwidth]{./pics/stall.png}};
-\end{tikzpicture}
-
-\begin{itemize}
-    \item CPU 0 starts write to cache line held by CPU 1
-    \item CPU 0 must wait for the data to arrive
-    \pause
-    \item Why wait? CPU 0 is going to unconditionally overwrite it!
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Cache coherency: takeaways}
-
-High-level ideas:
-\begin{itemize}
-    \item Memory split into chunks (cache lines) with auxiliary data (cache line state)
-    \pause
-    \item Copies of cache lines could reside in main memory and in processor-specific caches
-    \pause
-    \item Processors communicate via memory bus and use cache coherency protocol
-    \pause
-    \item Read/write operations change state of cache line and trigger message passing
-\end{itemize}
-
-\pause
-Design choices:
-\begin{itemize}
-    \pause
-    \item Cache line size (64, 128, 256 ...)
-    \pause
-    \item Number of states (MSI, MOESI, MESIF ...)
-    \pause
-    \item Hierarchy of caches (L1/L2/L3, iCache/dCache)
-    \pause
-    \item Topology of interconnect: see slide~\ref{interconnectPics}
-    \pause
-    \item When to send request? To whom? How to process incoming request?
-\end{itemize}
-
-\pause
-Challenges:
-\begin{itemize}
-    \pause
-    \item Invalidation storms
-    \pause
-    \item Unnecessary stalls 
-\end{itemize}
-
-\end{frame}
-
-\section{Hardware optimizations} % Store Buffer, Invalidate Queue, Load Buffer
-\showTOC
-
-\begin{frame}{Concurrent invariants and where to violate them}
-
-\begin{itemize}
-    \item \textbf{Coherence}: in any execution, for each location, there is a single linear order of all writes to that location which must be respected by all threads
-\end{itemize}
-
-\begin{itemize}
-    \item Step 1: "break" \ intuitive behaviour to get performance improvement
-    \item Step 2: repair consistency
-\end{itemize}
-\end{frame}
-
-
-\begin{frame}[t,fragile]{Which parts of cache coherence should be optimized?}
-
-\begin{tikzpicture}[remember picture,overlay]
-    \node[xshift=4cm,yshift=-4cm] at (current page.center) {\includegraphics[width=0.5\textwidth]{./pics/MESI.png}};
-\end{tikzpicture}
-
-
-State machine:
-\begin{itemize}
-    \item \textbf{Modified}, \textbf{Exclusive}, \textbf{Shared}, \textbf{Invalid}
-\end{itemize}
-
-Message passing on some transitions:
-\begin{itemize}
-    \item asynchronous (fire and forget)
-    \item synchronous (await confirmation)
-\end{itemize}
-
-Optimization opportunities:
-\begin{itemize}
-    \item Option 1: more states (MESIF, MOESI ...)
-    \item \only<1>{Option 2: more asynchronous operations}\only<2>{\textbf{Option 2: more asynchronous operations}}
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}{Removing unnecessary stalls}
-
-CPU execution:
-\begin{itemize}
-    \item \texttt{write(x = 1)} \pause \texttt{, cache\_line(x) is Shared}
-    \pause
-    \item Send invalidation requests \pause , Await confirmation
-    \pause
-    \item Modify \texttt{cache\_line(x)}
-
-    \pause
-    \item \texttt{write(y = 1)} \pause \texttt{, cache\_line(y) is Shared}
-    \pause
-    \item Send invalidation requests \pause ,  Await confirmation
-    \pause
-    \item Modify \texttt{cache\_line(y)}
-\end{itemize}
-
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-    \node[xshift=4cm,yshift=-3cm] at (current page.center) {\includegraphics[width=0.4\textwidth]{./pics/stall.png}};
-\end{tikzpicture}
-
-\pause
-
-Idea: batch processing
-\begin{itemize}
-    \item Buffer of "pending operations" \ that await confirmation
-    \item Execute other instructions \textbf{before} invalidation confirmed
-    \item Modification of the same location "consults" \ with buffer, not with cache (\textbf{store to load forwarding})
-\end{itemize}
-
-\end{frame}
-
-\subsection{Store buffering}
-\showTOCSub
-
-\begin{frame}[fragile,t]{Store buffering}
- 
- \begin{minted}[fontsize=\small]{c}
-                           int x, y;
- \end{minted}
- 
- \begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}} 
- \begin{minted}[fontsize=\small]{c}
- void threadA() {
-       x = 1;
-   int a = y;
- }
- \end{minted}
- &  
- \begin{minted}[fontsize=\small]{c}
- void threadB() {                                   
-         y = 1;                           
-     int b = x;                           
- }                    
- \end{minted}
- \end{tabular}
- 
- \pause
- 
- \begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}}
- \begin{minted}[fontsize=\small]{gas}
- # thread A
- mov [x] ,  1  # (A.1)
- mov EAX , [y] # (A.2)
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{gas}
- # thread B          
- mov [y] , 1  # (B.1) 
- mov EBX, [x] # (B.2) 
- \end{minted}
- \end{tabular}
- 
- \end{frame}
-
-
- \begin{frame}[fragile,t,noframenumbering]{Store buffering}
- 
- \begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}}
- \begin{minted}[fontsize=\small]{gas}
- # thread A
- mov [x] ,  1  # (A.1)
- mov EAX , [y] # (A.2)
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{gas}
- # thread B          
- mov [y] , 1  # (B.1) 
- mov EBX, [x] # (B.2) 
- \end{minted}
- \end{tabular}
- 
- \pause
-
-What could we see in \texttt{(EAX EBX)}?
-
-\only<1-4>{
- \texttt{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ (1 1)\ , (0 1)\ , (1 0)\ , (0 0)}
-}
-\only<5>{
- \texttt{Linearizable answer:\ \ (1 1)\ , (0 1)\ , (1 0)}
-}
-\only<6->{
- \texttt{Hardware answer:\ \ \ \ \ \ (1 1)\ , (0 1)\ , (1 0)\ , (0 0)}
-}
-\only<7->{
-    \textbf{WHAT?}
-}
- 
- \pause
- Possible executions:
- \begin{itemize}
-     \item \texttt{A.1 -> A.2 -> B.1 -> B.2}                               \only<4->{: \texttt{(0, 1)}}
-     \item \texttt{\ \ \ \ \ \ \       B.1 -> A.2 -> B.2}                  \only<4->{: \texttt{(1, 1)}}
-     \item \texttt{\ \ \ \ \ \ \ \ \ \ \ \ \ \              B.2 -> A.2}    \only<4->{: \texttt{(1, 1)}}
-     \item \texttt{B.1 -> A.1 -> A.2 -> B.2}                               \only<4->{: \texttt{(1, 1)}}
-     \item \texttt{\ \ \ \ \ \ \ \ \ \ \ \ \ \              B.2 -> A.2}    \only<4->{: \texttt{(1, 1)}}
-     \item \texttt{\ \ \ \ \ \ \       B.2 -> A.1 -> A.2}                  \only<4->{: \texttt{(1, 0)}}
- \end{itemize}
-
-\end{frame}
- 
-
-
-\begin{frame}[fragile]{Store buffering}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4.5cm,yshift=-6.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/processor/6.png}};
-\end{tikzpicture}
-
-
- \begin{tabular}{p{0.32\textwidth} p{0.32\textwidth}}
- \begin{minted}[fontsize=\small]{gas}
- # thread A
- mov [x] ,  1  # (A.1)
- mov EAX , [y] # (A.2)
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{gas}
- # thread B          
- mov [y] , 1  # (B.1) 
- mov EBX, [x] # (B.2) 
- \end{minted}
- \end{tabular}
-
- \texttt{Hardware allows: (EAX=0 EBX=0)}
-
-\begin{itemize}
-    \item Looks like CPU reorders memory load and stores
-    \item but does not break per-processor order \only<2>{\textbf{(store forwarding)}}
-    \item and keeps cache coherency (linear order of writes for single memory location)
-\end{itemize}
-
-\end{frame}
-
-
-\begin{frame}[fragile]{Store to load forwarding: why?}
-
-\begin{center}
-\begin{minted}{c}
-      static int a = 0, int b = 0;
-      a = 1;
-      b = a + 1;
-      assert(b == 2);
-\end{minted}
-\end{center}
-
-\begin{itemize}
-    \pause
-    \item CPU 0: start execute \texttt{a = 1}, \texttt{a} not in cache
-    \pause
-    \item CPU 0: send "read invalidate"
-    \pause
-    \item CPU 0: put ''\texttt{write(a = 1)}'' to store buffer
-    \pause
-    \item CPU 1: receive ''read invalidate'', respond
-    \pause
-    \item CPU 0: start execute \texttt{b = a + 1}
-    \pause
-    \item CPU 0: receive cache line from CPU 1 (''\texttt{a} is zero''), put it to cache
-    \pause
-    \item CPU 0: use \texttt{a} value from cache (\texttt{a = 0})
-    \pause
-    \item CPU 0: commit ''\texttt{write(a = 1)}'' from store buffer (now cache thinks ''\texttt{a} is one'')
-    \pause
-    \item CPU 0: finish writing to \texttt{b} ('''\texttt{b} is one'')
-    \pause
-    \item CPU 0: assert failed
-\end{itemize}
-
-\pause
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4.5cm,yshift=0.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/processor/6.png}};
-\end{tikzpicture}
-
-
-\end{frame}
-
-\begin{frame}{Store buffering: useful?}
-
-\begin{itemize}
-    \item Processor extended with internal buffer to speed-up execution
-    \item In-processor order conforms to program order (\textbf{store forwarding})
-    \begin{itemize}
-        \item Perfect single-CPU abstraction
-    \end{itemize}
-    \item Other processor may see memory updates to happen in non-program order
-    \begin{itemize}
-        \item Abstraction leaks\footnote{\tiny\url{https://www.joelonsoftware.com/2002/11/11/the-law-of-leaky-abstractions/}} in multicore environment
-    \end{itemize}
-\end{itemize}
-
-\pause
-Some concurrent algorithms do not tolerate arbitrary memory reorderings (e.g. Peterson Lock).
-
-\pause
-
-How to repair them?
-
-\pause
-
-Use special CPU instruction:
-\begin{itemize}
-    \pause
-    \item "flush store buffer before next operation"
-    \pause
-    \item "ensure no reordering of \textbf{this} and \textbf{that}"
-    \pause
-    \item "execute memory barrier instruction"
-\end{itemize}
-
-\pause
-
-We will discuss few more hardware optimizations before diving into memory barriers.
-
-\end{frame}
-
-
-\subsection{Load buffering}
-\showTOCSub
-
-\begin{frame}[fragile]{Load buffering}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4.5cm,yshift=-7.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/processor/7.png}};
-\end{tikzpicture}
-
-
- \begin{tabular}{p{0.32\textwidth} p{0.32\textwidth}}
- \begin{minted}[fontsize=\small]{gas}
- # thread A
- mov EAX , [y] # (A.1)
- mov [x] ,  1  # (A.2)
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{gas}
- # thread B          
- mov EBX, [x] # (B.1) 
- mov [y] , 1  # (B.2) 
- \end{minted}
-\end{tabular}
-
-\texttt{Possible result: (EAX=1, EBX=1)}
-
-\pause
-
-Some algorithms will fail (e.g. Peterson Lock).
-
-\pause
-
-How to repair them?
-
-\pause
-
-Use special CPU instruction:
-\begin{itemize}
-    \pause
-    \item "flush load buffer before next operation"
-    \pause
-    \item "ensure no reordering of \textbf{this} and \textbf{that}" 
-    \begin{itemize}
-        \pause 
-        \item should we flush load buffer and store buffer simultaneously?
-    \end{itemize}
-    \pause
-    \item "execute memory barrier instruction"
-\end{itemize}
-
-\pause
-Looks like we need different \textbf{kinds} of memory barriers.
-
-\end{frame}
-
-
-\subsection{Optional: Invalidate Queues}
-\showTOCSub
-
-\begin{frame}[fragile]{Invalidate Queue}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4.5cm,yshift=-7.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/processor/8.png}};
-\end{tikzpicture}
-
-\begin{minted}{c}
-void foo(void) {
-  a = 1;
-  smp_mb(); // memory barrier
-  b = 1;
-}
-void bar(void) {
-  while (b == 0) continue;
-  assert(a == 1); // fails with `a == 0`. WHAT?
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized getAndMumble() {
+    int prior  = value;
+    value = mumble(value);
+    return prior;
+  }
 }
 \end{minted}
 
 \pause
-Key insight:
+
+RMW everywhere!
+
 \begin{itemize}
-    \item Synchronization is \textbf{always} a \textbf{communication}
-    \begin{itemize}
-        \item The one to initiate data exchange (writer, request sender)
-        \item The one to ensure data view is consistent (reader, response sender)
-    \end{itemize}
-    \item "My thread executed strongest memory barrier, others will see updated data" \ is \textbf{NOT OK}
+  \item Most synchronization instructions are RMW methods
+  \item The rest can be trivially transformed into RMW methods
 \end{itemize}
 
 \end{frame}
 
 
-\begin{frame}[t,fragile,noframenumbering]{Invalidate Queue}
+\begin{frame}[t,fragile]{Read-Modify-Write: read}
 
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=4.5cm,yshift=-7.0cm] at (current page.center) {\includegraphics[width=0.35\textwidth]{./pics/processor/8.png}};
-\end{tikzpicture}
-
-\begin{minted}{c}
-void foo(void) {
-  a = 1;
-  smp_mb(); // memory barrier
-  b = 1;
-}
-void bar(void) {
-  while (b == 0) continue;
-  smp_mb(); // memory barrier
-  assert(a == 1); // never fails
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized read() {
+    int prior  = value;
+    value = value; // mumble == identity
+    return prior;
+  }
 }
 \end{minted}
 
-Optional homework: perfbook.B.4.3
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{Read-Modify-Write: getAndSet}
+
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized getAndSet(int v) {
+    int prior  = value;
+    value = v; // mumble(x) = v, constant
+    return prior;
+  } 
+}
+\end{minted}
 
 \end{frame}
 
-\subsection{Interconnect topology}
-\showTOCSub
+\begin{frame}[t,fragile,noframenumbering]{Read-Modify-Write: getAndIncrement}
 
-\begin{frame}[t,fragile]{Independent Reads of Independent Writes}
- 
- \begin{tabular}{p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth}}
- \begin{minted}[fontsize=\small]{python}
- thread1
-   x = 1
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{python}
- thread2
-   y = 1
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread3
-  r1 = x
-  r2 = y 
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread4
-  r3 = y
-  r4 = x
- \end{minted}
- \end{tabular}
- 
- Assume there is no in-CPU reordering of memory operations (no load buffering)
- 
- \pause
-Is it possible to observe \texttt{(r1 = 1, r2 = 0, r3 = 1, r4 = 0)}?
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized getAndIncrement() {
+    int prior  = value;
+    value = value + 1; // mumble(x) = x + 1
+    return prior;
+  }
+}
+\end{minted}
+\end{frame}
 
-\pause
+\begin{frame}[t,fragile,noframenumbering]{Read-Modify-Write: getAndAdd}
 
-\begin{center}
- \includegraphics[width=0.35\textwidth]{./pics/iriw.png}
-\end{center}
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized getAndAdd(int a) {
+    int prior  = value;
+    value = value + a; // mumble(x) = x + a
+    return prior;
+  }
+}
+\end{minted}
 
 \end{frame}
 
+\begin{frame}[t,fragile,noframenumbering]{Read-Modify-Write: compareAndSet}
 
-\begin{frame}[t,fragile,noframenumbering]{Independent Reads of Independent Writes}
- 
- \begin{tabular}{p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth} p{0.2\textwidth}}
- \begin{minted}[fontsize=\small]{python}
- thread1
-   x = 1
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{python}
- thread2
-   y = 1
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread3
-  r1 = x
-  r2 = y 
- \end{minted}
- 
- &
- 
- \begin{minted}[fontsize=\small]{python}
- thread4
-  r3 = y
-  r4 = x
- \end{minted}
- \end{tabular}
- 
- Assume there is no in-CPU reordering of memory operations (no load buffering)
-
- Is it possible to observe \texttt{(r1 = 1, r2 = 0, r3 = 1, r4 = 0)}?
-
- Hint: it is NOT linearizable
- 
- \pause
- \begin{itemize}
- \item \texttt{x86} or \texttt{x86\_64} (TSO): no
- 
- \pause
- \item \texttt{ARM} or \texttt{POWER}: yes\footnote<3->{\tiny A Tutorial Introduction to the ARM and POWER Relaxed Memory Models, section 6.1}
- \end{itemize}
- 
- \pause
- Information about cache lines could "travel" \ from one CPU to other CPU with different speed.
-
- \end{frame}
-
-
-\begin{frame}[t,fragile,label={interconnectPics}]{Interconnect topology}
-
-Key insight:
-\begin{itemize}
-    \item Cache lines could "travel" \ from one CPU to other CPU with different speed
-\end{itemize}
-
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=-4.5cm,yshift=-6.9cm] at (current page.center) {\includegraphics[width=0.45\textwidth]{./pics/interconnect1.png}};
-\end{tikzpicture}
-
-\begin{tikzpicture}[remember picture,overlay]
-\node[xshift=2.5cm,yshift=-6.9cm] at (current page.center) {\includegraphics[width=0.45\textwidth]{./pics/interconnect2.png}};
-\end{tikzpicture}
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public boolean synchronized compareAndSet(int expected, int update) {
+    int prior = value;       // load witness value
+    if (value == expected) { // if current value equals to expected
+      value = update;        // then replace it with update
+      return true;           // and return with success
+    }
+    return false;            // else return with failure, change nothing
+  }
+}
+\end{minted}
 
 \end{frame}
 
-\section{Hardware memory model}
-\showTOC
+\begin{frame}[t,fragile,noframenumbering]{Read-Modify-Write: compareAndExchange}
 
-\begin{frame}{Hardware-level reordering}
+\begin{minted}{java}
+public abstract class RMWRegister {
+  private int value;
+  public int synchronized compareAndExchange(int expected, int update) {
+    int prior = value;       // load witness value
+    if (value == expected) { // if current value equals to expected
+      value = update;        // then replace it with update      
+    }
+    return prior;            // return witness value
+  }
+}
+\end{minted}
+\end{frame}
 
-\only<1-2>{In one sentence}\only<3->{Conservative approximation}
+
+\begin{frame}[fragile]{Read-Modify-Write: now you know it}
+
+AtomicInteger\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/atomic/AtomicInteger.html}}:
 \pause
 \begin{itemize}
- \item Anything could be reordered with everything \only<4->{(point-of-view of some CPUs may disagree)}
- \pause
- \pause
- \pause
- \item Current CPU will "emulate" \ execution of single-threaded program "as if" \ in program order
- \pause
- \item Single memory cell is \textbf{coherent} 
- \begin{itemize}
-    \pause
-    \item linear order of writes for \textbf{particular} location
-    \pause
-    \item no ordering guarantees across \textbf{different} locations 
- \end{itemize}
+  \item \texttt{get()}, \texttt{getAndSet(int)}
+  \pause
+  \item \texttt{incrementAndGet()}, \texttt{addAndGet(int)}
+  \pause
+  \item \texttt{compareAndSet(int,int)}, \texttt{compareAndExchange(int,int)}
+  \pause
+  \item \texttt{updateAndGet(java.util.function.IntUnaryOperator)}
+  \item \texttt{accumulateAndGet(int,java.util.function.IntBinaryOperator)}  
 \end{itemize}
 
 \pause
-How to treat non-synchronized memory accesses:
-\begin{itemize}
-    \pause
-    \item Happened on some processor -- no guarantees it is visible on another processor
-    \pause
-    \item Synchronization is always a communication
-    \begin{itemize}
-        \pause
-        \item somebody writes and ensures data will be properly shared (memory barrier)
-        \pause
-        \item somebody reads and ensures data view is consistent (memory barrier)
-    \end{itemize}
-    \pause
-    \item "Today it works on my processor" \ is \textbf{NOT OK}
-\end{itemize}
+Atomic*\footnote<6->{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/atomic/package-summary.html}}
 
-% For smarties
-% - Caution: you could find \textbf{very few} exceptions to this rule (asymmetric dekker synhronization, linux membar, serialize via memaccess trap)  
-%            actually, those are bi-directional algorithm
-%            ask me why, if you are interested
+\begin{itemize}
+  \item AtomicBoolean
+  \item AtomicInteger, AtomicIntegerArray
+  \item AtomicLong, AtomicLongArray
+  \item AtomicReference, AtomicReferenceArray
+  \pause
+  \item AtomicMarkableReference, AtomicStampedReference
+\end{itemize}
 
 \end{frame}
 
 
-\begin{frame}[t,fragile]{Weak memory model}
+\begin{frame}[fragile]{Atomic RMW: what's the point?}
 
-We started with simplistic model of multiprocessor memory hierarchy
+General form of atomic RMW:
+\begin{minted}{java}
+public int synchronized getAndMumble() {
+  int prior  = value;
+  value = mumble(value);
+  return prior;
+}
+\end{minted}
 
 \pause
-
-\begin{center}
-  \includegraphics[width=0.3\textwidth]{./pics/processor/5.png}
-\end{center}
-
+Interesting if and only if it is a non-blocking wait-free operation
 \pause
 \begin{itemize}
-    \item All memory operations are guarded with read-write mutex (thus ordered)
-    \item Read-mostly workloads scale quite well
-    \item Performance is low due to contention and slow queries of data
+  \item Finishes in constant time
+  \item Even in case of contention
+  \item Independently of thread scheduling
+  \pause
+  \item Looks like a "mutex on steroids"
+  \pause
+  \item Supported on hardware level
 \end{itemize}
+
 \end{frame}
 
 
-\begin{frame}[t,fragile,noframenumbering]{Weak memory model}
+\begin{frame}[fragile,noframenumbering]{Atomic RMW: what's the point?}
 
-We started with simplistic model of multiprocessor memory hierarchy
+\begin{minted}{java}
+public int synchronized getAndMumble() {
+  int prior  = value;
+  value = mumble(value);
+  return prior;
+}
+\end{minted}
+
+Non-blocking wait-free operation
 \begin{itemize}
-    \item All memory operations are guarded with read-write mutex (thus ordered)
-    \item Read-mostly workloads scale quite well
-    \item Performance is low due to contention and slow queries of data
+  \item Finishes in constant time
+  \item Even in case of contention
+  \item Independently of thread scheduling
 \end{itemize}
+
+\pause
+
+\begin{theorem}
+Any non-trivial RMW object has consensus number at least 2
+\end{theorem}
+
+\pause
+
+\begin{itemize}
+  \item No wait-free implementation of RMW registers from atomic registers
+  \item Hardware RMW instructions not just a convenience
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Foundations: here we go again}
+
+Atomic registers
+\begin{itemize}
+  \item From safe SRSW Boolean register \pause up to atomic MRMW Integer register \pause and atomic snapshot of $N$ registers
+\end{itemize}
+\pause
+This journey required a lot of complicated wait-free constructions! \pause And in the very end ... 
 
 \pause 
-We started to optimize our model and lost "useful" \ consistency guarantees
+
+\begin{theorem}
+  Atomic read/write registers have consensus number 1
+\end{theorem}
+
+\pause
+Atomic RMW registers
 \begin{itemize}
-    \pause
-    \item Replication pattern (multiple copies of same data in different caches)
-    \pause
-    \item Reordering of independent operations (store buffering, load buffering)
-    \pause
-    \item Making message-passing asynchronous (invalidate queues)    
-    \pause
-    \item Non-uniform interconnect (faster/slower message passing)
+  \item Generalization of any "local" \ synchronized operation 
 \end{itemize}
+\pause Could implement a lot of even more complicated wait-free algorithms! \pause And in the very end ... 
+
+\pause
+
+\begin{theorem}
+Any non-trivial RMW object has consensus number at least 2
+\end{theorem}
+
+\pause
+
+When will we stop?
 
 \end{frame}
 
 
-\begin{frame}[t,fragile,noframenumbering]{Weak memory model}
+\begin{frame}[fragile]{Consensus: final point}
 
-We started to optimize our model and lost "useful" \ consistency guarantees
-\begin{itemize}
-    \item Replication pattern (multiple copies of same data in different caches)
-    \item Reordering of independent operations (store buffering, load buffering)
-    \item Making message-passing asynchronous (invalidate queues)    
-    \item Non-uniform interconnect (faster/slower message passing)
-\end{itemize}
+\begin{theorem}
+  Atomic read/write registers have consensus number 1
+\end{theorem}
 
-\pause
-We have less strict rules on what is guaranteed for memory operations
-\begin{itemize}
-    \item \textbf{Relaxed} memory model
-    \item \textbf{Weak} memory model
-\end{itemize}
+\begin{theorem}
+Any non-trivial RMW object has consensus number at least 2
+\end{theorem}
 
 \pause
-\begin{itemize}
-    \item Interesting fact №1: stronger CPU memory model -- less bugs you encounter during maintenance of large concurrent software system
-    \item Interesting fact №2: smartphones, laptops, energy-efficient servers tend to use weak hardware
-\end{itemize}
+
+\begin{theorem}
+ \texttt{getAndSet}, \texttt{getAndIncrement}, \texttt{getAndAdd} have consensus number exactly 2
+\end{theorem}
+
+\pause
+
+\begin{theorem}
+\texttt{compareAndSet} has $\infty$ consensus number
+\end{theorem}
 
 \end{frame}
 
 
-\section{Memory barriers}
+\begin{frame}[fragile,noframenumbering]{Consensus: final point}
+\begin{theorem}
+\texttt{compareAndSet} has $\infty$ consensus number
+\end{theorem}
+
+\pause
+
+\begin{minted}{java}
+public class RMWConsensus {
+  private AtomicInteger r = new AtomicInteger(-1); // init with -1
+  private int[] proposed = new int[N]; // values proposed by threads
+  public int decide(int value) { 
+    int i = ThreadID.get();   // I am thread i
+    proposed[i] = value;      // I propose value
+    r.compareAndSet(-1, i);   // try to set my id as `winner`
+    return proposed[r.get()]; // return value proposed by winner
+  }
+}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile]{The consensus hierarchy}
+
+\begin{itemize}
+  \item \textbf{1}. Read/Write Registers, Snapshots ...
+
+  \item \textbf{2}. \texttt{getAndSet}, \texttt{getAndIncrement} ...
+
+  \item ...
+
+  \item $\infty$. \texttt{compareAndSet} ...
+\end{itemize}
+
+\pause
+
+Multiprocessor concurrent environment is \textbf{very} friendly to wait-free algorithms. Hardware engineers know how to efficiently implement \texttt{compareAndSet}.
+\pause We will discuss it in the very next Lecture~\cacheCoherencyNum \ (cache coherency).
+
+\pause
+Some other environments -- distributed systems, supercomputers, telegraph, pigeon posts etc. -- could be \textbf{different}. Now you know how to do the analysis of "computability" \ in such environments.
+
+\pause
+Challenges of the new era:
+\begin{itemize}
+  \item Highly distributed systems (internet nodes, geographically distributed data centers) with non-guaranteed message delivery (UDP)
+  \item Heterogeneous computing (CPU, GPU, FPGA, GPGPU ...)
+\end{itemize}
+
+\end{frame}
+
+\section{Concurrent Counter: puzzlers}
 \showTOC
 
-\begin{frame}{Memory barriers: definition}
+\begin{frame}[t,fragile]{SynchronizedCounter}
 
-\textbf{Memory barrier}
-\begin{itemize}
-    \item Hardware-specific machine instruction that helps to enforce some kind of ordering between memory operations 
-    \pause
-    \item Affects \textbf{current} processor
-    \pause
-    \item But actually we need to prevent reordering of memory operations \textbf{as they seen by other processors}
-\end{itemize}
-\pause
-Do not forget to insert memory barriers on both sides of communication protocol!
+\begin{minted}{java}
+public class SynchronizedCounter {
+    private long cnt;
+    public SynchronizedCounter(long initial) { this.cnt = initial; }
+    // assume delta > 0
+    public synchronized void increment(int delta) { cnt += delta; }
+    public synchronized long get() { return cnt; }
+}
+\end{minted}
 
-\pause
-Semantics is very architecture-specific:
-\begin{itemize}
-    \item \texttt{x86\_64}  -- \texttt{mfence}, \texttt{lock} prefix
-    \item \texttt{arm64} -- \texttt{dmb}
-    \item \texttt{power} -- \texttt{sync}, \texttt{lwsync}
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
 \end{itemize}
 
-\pause
-Described in many pages of architecture manual. \pause Inconvenient.
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{FairLockedCounter}
+
+\begin{minted}{java}
+public class FairLockedCounter {
+    private long cnt;
+    private final Lock lock = new ReentrantLock(/* fair = */ true); 
+    public FairLockedCounter(long initial) { this.cnt = initial; }
+    public void increment(int delta) { 
+      lock.lock() try { cnt += delta; } finally { lock.unlock(); } 
+    }
+    public long get() { 
+      lock.lock(); try { return cnt; } finally { lock.unlock(); }
+    }
+}
+\end{minted}
+
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
+\end{itemize}
 
 \end{frame}
 
 
-\begin{frame}[fragile]{Memory barriers: taxonomy}
+\begin{frame}[t,fragile]{AtomicLoopCounter}
 
-\textbf{Memory barrier}
+\begin{minted}{java}
+public class AtomicLoopCounter {
+    private long cnt;
+    private final AtomicBoolean status = new AtomicBoolean(false); 
+    public AtomicLoopCounter(long initial) { this.cnt = initial; }
+    public void increment(int delta) { 
+      while (status.getAndSet(true) == true) {}
+      try { cnt += delta; } finally { status.set(false); }
+    }
+    public long get() { 
+      while (status.getAndSet(true) == true) {}
+      try { return cnt; } finally { status.set(false); }
+    }}
+\end{minted}
+
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[t,fragile]{AtomicIncCounter}
+
+\begin{minted}{java}
+public class AtomicIncCounter {
+    private final AtomicLong cnt = new AtomicLong(0); 
+    public AtomicIncCounter(long initial) { cnt.set(initial); }
+    public void increment(int delta) { 
+      cnt.getAndAdd(delta);
+    }
+    public long get() { 
+      return cnt.get();
+    }}
+\end{minted}
+
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[t,fragile]{AtomicCASCounter}
+
+\begin{minted}{java}
+public class AtomicCASCounter {
+    private final AtomicLong cnt = new AtomicLong(0); 
+    public AtomicCASCounter(long initial) { cnt.set(initial); }
+    public void increment(int delta) {
+      long expected = cnt.get();
+      while (true) {        
+        long witness = cnt.compareAndExchange(expected, expected + delta);
+        if (witness == expected) { return; } else { expected = witness; }        
+      }
+    }
+    public long get() { return cnt.get(); }}
+\end{minted}
+
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[t,fragile]{ReplicatedCounter}
+
+\begin{minted}{java}
+static final ThreadLocal<Long> privateCounter = new ThreadLocal<Long>();
+public void increment(int delta) {
+  privateCounter.set(privateCounter.get() + delta);   
+}
+public long get() { 
+  long result = 0;
+  for (Thread t: ALL_THREADS) result += t.privateCounter.get(); // PSEUDOCODE
+  return result;
+}
+\end{minted}
+
+
+\begin{itemize}  
+  \item Wait-free, Lock-free, Obstruction-free?
+  \item Starvation-free, Deadlock-free?
+  \pause
+  \item Linearizable? \pause What if \texttt{ThreadLocal} are Atomic MRMW registers?
+\end{itemize}
+
+\pause \textbf{Reminder}: Task 2.4, NegativeSplitCounter
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Read-modify-write operations not always are linearization points}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/9.1}}
+\begin{homeworkmail}{Task 9.1}
+    \begin{itemize}      
+      \item \texttt{HWQueue.enq} consists of two instructions
+      \item Prove that first instruction (\texttt{getAndIncrement}) is not a linearization point in some valid executions
+      \item Prove that second instruction (\texttt{set}) is not a linearization point in some valid executions
+      \item Consider provided counterexamples: do they prove that \texttt{HWQueue} is not linearizable?
+    \end{itemize}
+\end{homeworkmail}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Concurrent counters: summary}
+
+\begin{itemize}  
+  \item Progress conditions describe the whole method/algorithm/object
+  \pause
+  \item Fixed number lines of code -- does not mean wait-free
+  \pause
+  \item No explicit locks -- does not mean lock-free
+  \pause
+  \item \texttt{synchronized} does not guarantee starvation freedom
+  \pause
+  \item \texttt{ReentrantLock} could be configured as fair (starvation-free)
+  \pause
+  \item \texttt{CAS} is not always better than \texttt{getAndAdd}
+  \pause
+  \item Wait-free and smart does not mean correct (consistent or linearizable)
+  \pause
+  \item Read-modify-write operations not necessarily are linearization points
+\end{itemize}
+
+\end{frame}
+
+\section{Basic spin locks}
+\showTOC
+
+\begin{frame}[fragile]{Test-And-Set: non-reentrant boolean spin lock}
+
+\begin{minted}{java}
+class TASlock {
+  private static final boolean LOCKED = true, UNLOCKED = false;
+  private final AtomicBoolean state = new AtomicBoolean(UNLOCKED);
+  void lock() {
+    while (true) {
+      boolean before = state.getAndSet(LOCKED); // <-----------|
+      if (before == UNLOCKED) { return; } // I win             |
+      else {}                             // I lose, repeat ---+      
+  }}
+  void unlock() { state.set(UNLOCKED); }
+}
+\end{minted}
+
+\pause
 \begin{itemize}
-    \item Hardware-specific machine instruction that helps to enforce some kind of ordering between memory operations 
-    \item Affects \textbf{current} processor
-    \item Should be used on both sides of communication protocol
+  \item Pros: easy to implement, easy to prove correctness, ultra-fast ownership handoff
+  \item Cons: burn CPU, contention on memory bus
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Test-And-Set: reentrant spin lock}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/9.2}}
+\begin{homeworkmail}{Task 9.2}
+    \begin{itemize}      
+      \item Replace \texttt{AtomicBoolean} with \texttt{AtomicStampedReference(Thread.currentThread, counter)} and make TAS lock reentrant. 
+      \item Provide at least 3 tests written in JCStress.      
+    \end{itemize}
+\end{homeworkmail}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Test-And-Set: non-reentrant boolean spin lock}
+
+\begin{minted}{java}
+class TASlock {
+  private static final boolean LOCKED = true, UNLOCKED = false;
+  private final AtomicBoolean state = new AtomicBoolean(UNLOCKED);
+  void lock() {
+    while (true) {
+      boolean before = state.getAndSet(LOCKED); // <-----------|
+      if (before == UNLOCKED) { return; } // I win             |
+      else {}                             // I lose, repeat ---+      
+  }}
+  void unlock() { state.set(UNLOCKED); }
+}
+\end{minted}
+
+\begin{itemize}
+  \item Pros: easy to implement, easy to prove correctness, ultra-fast ownership handoff.
+  \item Cons: burn CPU, \textbf{contention on memory bus}. \only<2->{\textbf{WHAT?}}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Memory bus}
+
+\only<1>{
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/cache/38.png}
+\end{center}
+}
+
+\only<2>{
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/cache/39.png}
+\end{center}
+}
+
+\only<3>{
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/cache/40.png}
+\end{center}
+}
+
+\only<4>{
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{./pics/cache/41.png}
+\end{center}
+}
+
+\end{frame}
+
+\begin{frame}{Cache}
+
+\begin{itemize}
+  \item \textbf{Cache hit} -- data found in local cache of current processor
+  \item \textbf{Cache miss} -- up-to-date data must be found elsewhere
 \end{itemize}
 
 \pause
 
-Simplified taxonomy of memory barriers:
+There are many questions related to cache-based design:
 \begin{itemize}
-    \item \texttt{Store\_Store}, \texttt{Store\_Load}, \texttt{Load\_Store}, \texttt{Load\_Load}
+  \item How many level of caches should be used?
+  \item What is optimal size for each level?
+  \item How to properly synchronize caches?
+  \item How to move out stale data from cache?
+  \item ... 
 \end{itemize}
 
 \pause
 
-\begin{tabular}{p{8cm}p{5cm}}
+We will go deeper in next Lecture.
 
-\begin{minted}{c}
-  int x = static.data1;
-  Store_Store();
-  Store_Load();
-  int y = static.data2;
-  static.data3 = 17;
+\pause
+
+Today we will try to illustrate that even basic low-level knowledge helps to speed-up concurrent algorithms.
+
+\end{frame}
+
+
+\begin{frame}{Read data}
+
+\only<1>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/45.png} \end{center} }
+\only<2>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/46.png} \end{center} }
+\only<3>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/47.png} \end{center} }
+\only<4>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/48.png} \end{center} }
+\only<5>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/49.png} \end{center} }
+\only<6>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/50.png} \end{center} }
+\only<7>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/51.png} \end{center} }
+\only<8->{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/52.png} \end{center} }
+\only<9->{
+\begin{center}
+  And now we have several copies of the same data in different places
+\end{center}
+}
+
+\end{frame}
+
+\begin{frame}{Modify data}
+
+\only<1>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/53.png} \end{center} }
+\only<2>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/54.png} \end{center} }
+\only<3>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/55.png} \end{center} }
+\only<4>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/cache/56.png} \end{center} }
+
+\end{frame}
+
+
+\begin{frame}{Cache coherence}
+
+We have lots of copies of data
+\begin{itemize}
+  \item Original copy in memory 
+  \item Cached copies at processors
+\end{itemize}
+
+\pause
+
+Some processor modifies its own copy
+\begin{itemize}
+  \item What do we do with the others?
+  \item How to avoid confusion?
+\end{itemize}
+
+\pause
+
+Cache coherence protocol -- algorithm that handles such problems.
+
+\pause
+
+Low-level concurrent algorithm that is implemented in hardware
+\begin{itemize}
+  \pause
+  \item No ReentrantLocks, Semaphores, ReadWriteLocks
+  \item Critical for speed of the whole system (hope it is non-blocking)
+  \pause
+  \item Provides some consistency guarantees on "our view of" \ memory cells
+\end{itemize}
+\pause
+
+What a joy that you have already encountered such tasks before!
+
+\pause
+
+Next Lecture will be s-o-o-o interesting.
+
+\pause
+
+Let's go back to the naive multiprocessor model.
+
+\end{frame}
+
+\begin{frame}{Cache coherence: invalidation}
+
+We have lots of copies of data
+\begin{itemize}
+  \item Original copy in memory 
+  \item Cached copies at processors
+\end{itemize}
+
+Some processor modifies its own copy
+
+\pause
+\begin{itemize}
+  \item Broadcast a special message "invalidate data"
+  \pause
+  \item Ensure other processors replied to this as "Yes, sir!"
+  \pause
+  \item Now current processor is the unique owner of data, others will consult with him
+  \pause
+  \item Modify data
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Cache coherence: message passing}
+Messages
+\begin{itemize}
+  \item Request for read, Respond with data
+  \item Request for invalidate, Acknowledge invalidation
+  \item Write-back modified data to main memory
+\end{itemize}
+
+\pause
+
+Nanoseconds\footnote<2->{\tiny\url{https://americanhistory.si.edu/collections/object/nmah_692464}}:
+\begin{center} 
+  \includegraphics[width=0.4\textwidth]{./pics/nano.jpg} 
+\end{center}
+\end{frame}
+
+\begin{frame}{Memory bus, cache coherence, multiprocessor: takeaways}
+
+Multiprocessor systems have complicated memory subsystem
+\begin{itemize}
+  \pause
+  \item Set of caches
+  \pause
+  \item synchronized with each other on low hardware level
+  \pause
+  \item using replication pattern (copy to read, invalidate for write)
+  \pause
+  \item to guarantee cache coherence (consistency of memory cell view)
+\end{itemize}
+
+\pause
+Simplified cost model:
+\begin{itemize}
+  \item Read from private non-shared data is ultra-fast
+  \item Write to private non-shared data is ultra-fast
+  \item Read from private shared data is ultra-fast
+  \item Write to shared data requires communication (invalidate and await)
+  \item Read/write of non-cached location takes significant time
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{TASLock: reminder}
+
+\begin{minted}{java}
+class TASlock {
+  private static final boolean LOCKED = true, UNLOCKED = false;
+  private final AtomicBoolean state = new AtomicBoolean(UNLOCKED);
+  void lock() {
+    while (true) {
+      boolean before = state.getAndSet(LOCKED); // <-----------|
+      if (before == UNLOCKED) { return; } // I win             |
+      else {}                             // I lose, repeat ---+      
+  }}
+  void unlock() { state.set(UNLOCKED); }
+}
 \end{minted}
 
- &
+\begin{itemize}
+  \item Pros: easy to implement, easy to prove correctness, ultra-fast ownership handoff.
+  \item Cons: burn CPU, \textbf{contention on memory bus}.
+\end{itemize}
+\end{frame}
 
- \begin{minted}{c}
-  int x = static.data1;
-  Load_Load();
 
-  int y = static.data2;
-  static.data3 = 17;
+\begin{frame}[fragile]{Test-and-Test-and-Set: non-reentrant boolean spin lock}
+
+\begin{minted}{java}
+class TATASlock {
+  private static final boolean LOCKED = true, UNLOCKED = false;
+  private final AtomicBoolean state = new AtomicBoolean(UNLOCKED);
+  void lock() {
+    while (true) {
+      while (state.get() == LOCKED) {} // do not write if mutex is busy 
+      if (state.getAndSet(LOCKED) == UNLOCKED) { // try acquire
+        return;
+}}}}
 \end{minted}
 
+\pause
+Lock acquisition is OK, no excessive cache coherence bus traffic.
+
+\pause
+What happens on release?
+
+\pause
+Invalidation storm.
+
+\end{frame}
+
+
+\begin{frame}{Invalidation storm}
+
+\only<1>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/storm/72.png} \end{center} }
+\only<2>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/storm/73.png} \end{center} }
+\only<3>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/storm/74.png} \end{center} }
+\only<4>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/storm/75.png} \end{center} }
+
+\end{frame}
+
+
+\begin{frame}[fragile]{TATAS: invalidation storm}
+
+\begin{itemize}
+  \item Everyone misses
+  \pause
+  \item Everyone does TAS
+  \pause
+  \item Invalidates others’ caches
+  \pause
+  \item Eventually \textit{quiesces} after lock acquired
+\end{itemize}
+
+\pause
+How long does this take?  
+
+\pause
+
+General pattern for TATAS:
+\begin{itemize}  
+  \pause
+  \item Acquire lock
+  \pause
+  \item Pause without using bus
+  \pause
+  \item Use bus heavily
+\end{itemize}
+
+\pause
+\begin{itemize}  
+  \item If pause > quiescence time
+  \begin{itemize}
+    \item critical section duration independent of number of threads
+  \end{itemize}
+
+  \pause
+  \item If pause < quiescence time
+  \begin{itemize}
+    \item critical section duration slower with more threads
+  \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Quiescence Time}
+
+\only<1>{ \begin{center} \includegraphics[width=0.7\textwidth]{./pics/storm/78.png} \end{center} }
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Spin locks and hardware, you know so far}
+
+\begin{itemize}
+  \item Easy to implement and prove correctness
+  \item Burn CPU for better responsiveness
+  \item Read before trying to acquire lock, writes to actually shared memory are expensive
+  \item Suffer from invalidation storm in contended environment when lock is released
+\end{itemize}
+
+\pause
+
+Problems arise when
+\begin{itemize}
+  \pause
+  \item Many threads compete for the single lock
+  \pause
+  \item Critical section is quite small ($\approx$ quiescence time of h/w)
+  \pause
+  \item Maybe application is misdesigned?
+\end{itemize}
+
+\pause
+
+Any kind of "storm" \ (trap storm, invalidation storm, scheduler storm etc.) is a strong sign of misdesign. \pause
+You could workaround it to some extent, but it will manifest itself later (more threads, faster h/w, better OS).
+
+\pause
+Anyway, let's try to avoid the invalidation storm and (maybe) improve our skills with "designing it right"
+
+\end{frame}
+
+
+% \begin{frame}{Cache contention/false sharing}
+% 
+% because you do not control allocation and we have caheline size 64-128 bytes
+% 
+% TODO: be covered in Lec-TODO of course
+% 
+% but in practice you need paddings @Contended and stuff
+% \end{frame}
+
+
+\begin{frame}[fragile]{Exponential Backoff}
+
+\begin{minted}{java}
+public void lock() {
+  int delay = MIN_DELAY;
+  while (true) {
+    while (state.get() == LOCKED) {} // read-only polling
+    if (lock.getAndSet(LOCKED) == UNLOCKED) return; // return on success
+    sleep(random() % delay); // delay next write request on failure
+    delay = Math.min(delay * 2, MAX_DELAY); // keep delay within bounds    
+  }
+}
+\end{minted}
+
+\pause
+\begin{itemize}
+  \item Trade-off: CPU overuse vs. latency
+  \pause
+  \item Still very naive, we will continue in Lecture~\advancedConcurrencyNum \ (queue locks)
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{Spin locks: summary}
+
+
+\begin{itemize}
+  \item Easy to implement and prove correctness
+  \item Burn CPU vs. better responsiveness
+  \item Actual performance depend on h/w (cache coherency) and application (contention)
+\end{itemize}
+
+\pause
+
+\begin{center} \includegraphics[width=0.5\textwidth]{./pics/locks.png} 
+\end{center} 
+
+\end{frame}
+
+
+\begin{frame}[t,fragile,noframenumbering]{Spin locks: summary}
+
+\begin{itemize}
+  \item Easy to implement and prove correctness
+  \item Burn CPU vs. better responsiveness
+  \item Actual performance depend on h/w (cache coherency) and application (contention)
+\end{itemize}
+
+\textbf{Critically important}:
+\begin{itemize}
+  \pause
+  \item Spin locking is a design pattern, building block for "normal" \ locking algorithms
+  \pause
+  \item \textbf{NEVER} use plain spin locks anywhere in production system\footnote<3->{\tiny\url{https://www.realworldtech.com/forum/?threadid=189711&curpostid=189723}} \pause unless you know what you are doing. \pause After finishing this introductory course on concurrency, you definitely \textbf{don't}.
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Spin locks: homework}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/9.3}}
+\begin{homeworkmail}{Task 9.3}
+    Measure performance of \texttt{TASLock}, \texttt{TATASLock}, \texttt{ExpBackoffLock}
+    \begin{itemize}
+      \item 1, 2, 3, 4, 5, 6, 7, 8, 16, 32 concurrent threads
+      \item with small critical section (increment)
+      \item with moderate critical section (compute n-th fibonacci number recursively)
+    \end{itemize}
+    using JMH.
+\end{homeworkmail}
+
+\end{frame}
+
+\section{Lock-free stack and ABA}
+\showTOC
+
+\begin{frame}[t]{Lock-free stack}
+
+\begin{itemize}
+  \item \texttt{push(x)}
+  \item \texttt{pop()}
+  \item Last-in, First-out (LIFO) order
+\end{itemize}
+
+% Further reading: conc elimination techniques
+\end{frame}
+
+\begin{frame}{Lock-free stack: push}
+\only<1>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/117.png} \end{center} }
+\only<2>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/118.png} \end{center} }
+\only<3>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/119.png} \end{center} }
+\only<4>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/120.png} \end{center} }
+\only<5>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/121.png} \end{center} }
+\only<6>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/122.png} \end{center} }
+\only<7>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/123.png} \end{center} }
+\only<8>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/124.png} \end{center} }
+\end{frame}
+
+
+\begin{frame}{Lock-free stack: pop}
+\only<1>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/125.png} \end{center} }
+\only<2>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/126.png} \end{center} }
+\only<3>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/127.png} \end{center} }
+\only<4>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/128.png} \end{center} }
+\only<5>{ \begin{center} \includegraphics[width=0.5\textwidth]{./pics/stack/129.png} \end{center} }
+\end{frame}
+
+
+\begin{frame}[fragile]{Lock-free stack}
+\begin{minted}{java}
+public class LockFreeStack {
+  private AtomicReference top = new AtomicReference(null); 
+  public boolean tryPush(Node node){
+    Node oldTop = top.get();    
+    node.next = oldTop;
+    return top.compareAndSet(oldTop, node);
+  }
+  public void push(T value) {
+    Node node = new Node(value); 
+    while (true) {
+      if (tryPush(node)) return;
+      backoff.backoff();
+  }}
+\end{minted}
+
+\pause
+\begin{itemize}
+  \item Wait-free, lock-free or obstruction-free?
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[t,fragile]{Lock-free stack: summary}
+
+\begin{itemize}
+  \item Your first non-trivial and useful lock-free algorithm based on RMW
+  \item Elegant
+  \item Easy to reason about
+  \item Easy to define linearization points
+\end{itemize}
+
+\pause
+
+But not perfect?
+
+\end{frame}
+
+\begin{frame}[fragile]{Node pooling}
+
+\begin{minted}{java}
+public class LockFreeStack {
+  private AtomicReference top = new AtomicReference(null); 
+  public boolean tryPush(Node node){
+    Node oldTop = top.get();    
+    node.next = oldTop;
+    return top.compareAndSet(oldTop, node);
+  }
+  public void push(T value) {
+    Node node = new Node(value); // Yikes!
+
+
+    while (true) {
+      if (tryPush(node)) return;
+      backoff.backoff();
+  }}
+\end{minted}
+
+\end{frame}
+
+
+\begin{frame}[fragile,noframenumbering]{Node pooling}
+
+\begin{minted}{java}
+public class LockFreeStack {
+  private AtomicReference top = new AtomicReference(null); 
+  public boolean tryPush(Node node){
+    Node oldTop = top.get();    
+    node.next = oldTop;
+    return top.compareAndSet(oldTop, node);
+  }
+  public void push(T value) {
+    Node node = ThreadLocalNodePool.get(); // successful `pop` 
+                                           // will populate this cache
+    node.value = value;
+    while (true) {
+      if (tryPush(node)) return;
+      backoff.backoff();
+  }}
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[t,fragile]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)              {$top$};
+  \node[state,draw=none]  (E) [above=of A] {};
+  \node[state]  (A) [right=of main] {$A$};
+  \node[state]  (B) [right=of A]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) edge  node   {} (A)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+\end{tabular}
+\end{frame}
+
+
+
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)              {$top$};
+  \node[state,draw=none]  (E) [above=of A] {};
+  \node[state]  (A) [right=of main] {$A$};
+  \node[state]  (B) [right=of A]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) edge  node   {} (A)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+\textbf{Start \texttt{pop()}} (\texttt{top.CAS(A, B)}) &
 \end{tabular}
 
 \end{frame}
 
 
-\begin{frame}{Memory barriers: rule of thumb}
 
-\pause
-Do not use them! \pause Seriously!
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state,draw=none]  (E) [right=of main] {};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
 
-\pause
+  \path[->] (top) edge node {} (B)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
 
-Every modern language supports civilized concurrency and provides plenty of useful tools:
-\begin{itemize}
-    \pause
-    \item design-level abstractions -- \texttt{Executor}, \texttt{Future}, \texttt{ParallelStream} ... 
-    \pause
-    \item concurrent data structures -- \texttt{Lock}, \texttt{Semaphore}, \texttt{CountDownLatch}, \texttt{Monitor} ...
-    \pause
-    \item atomic read-modify-write operations - \texttt{getAndSet}, \texttt{compareAndExchange}, \texttt{getAndAdd} ...
-\end{itemize}
-
-\pause
-
-Memory barriers are needed to:
-\begin{itemize}
-    \item implement basics (writing your own OS, compiler, VM)
-    \pause
-    \item get CRITICAL performance \pause and spend a lot of resources to maintain the code
-    \pause
-    \item design useful concurrent programming language (see you at next Lecture)
-\end{itemize}
-
-\end{frame}
-
-\section{Litmus tests}
-\showTOC
-
-\begin{frame}[fragile]{Litmus test: definition}
-
-\begin{itemize}
-    \item \textbf{Litmus test}: very small concurrent program that access few shared variables and illustrates some relaxed-memory phenomena
-\end{itemize}
-
-\pause
-
-\textbf{Coherence (CoRR1)}
-
-Initial state: \texttt{x = 1}, Forbidden: \texttt{r1 = 2, r2 = 1}
-\begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}} 
- \begin{minted}[fontsize=\small]{c}
- void threadA() {
-       x = 2;   
- }
- \end{minted}
- &  
- \begin{minted}[fontsize=\small]{c}
- void threadB() {                                   
-     int r1 = x;                           
-     int r2 = x;                           
- }                    
- \end{minted}
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+                     &  \texttt{A = pop()} \\
 \end{tabular}
-
-\pause
-
-\textbf{Store buffering}
-
- \begin{tabular}{p{0.32\textwidth} p{0.32\textwidth}}
- \begin{minted}[fontsize=\small]{gas}
- mov [x] ,  1  # (A.1)
- mov EAX , [y] # (A.2)
- \end{minted}
- 
- & 
- 
- \begin{minted}[fontsize=\small]{gas}
- mov [y] , 1  # (B.1) 
- mov EBX, [x] # (B.2) 
- \end{minted}
- \end{tabular}
-
- \texttt{Hardware allows: (EAX=0 EBX=0)}
-
 \end{frame}
 
-\begin{frame}[fragile]{Litmus test}
 
-Litmus tests are basic building blocks to construct reliable concurrent primitives
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state,draw=none]  (E) [right=of main] {};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
 
+  \path[->] (top) edge node {} (B)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+                     &  \texttt{A = pop()} \\
+                     &  \texttt{reclaim(A)} \\
+\end{tabular}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state]  (C) [right=of main] {$C$};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) edge node {} (C)
+            (C) edge  node   {} (B)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+                     &  \texttt{A = pop()} \\
+                     &  \texttt{reclaim(A)} \\
+                     &  \texttt{push(C)} \\                     
+\end{tabular}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state]  (C) [right=of main] {$C$};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) edge node {} (C)
+            (C) edge  node   {} (B)
+            (A) edge  node   {} (B)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+                     &  \texttt{A = pop()} \\
+                     &  \texttt{reclaim(A)} \\
+                     &  \texttt{push(C)} \\                     
+                     &  \texttt{push(A')} \\                                          
+\end{tabular}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state]  (C) [right=of main] {$C$};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) edge node {} (A)
+            (C) edge  node   {} (B)
+            (A) edge  node   {} (C)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+                     &  \texttt{A = pop()} \\
+                     &  \texttt{reclaim(A)} \\
+                     &  \texttt{push(C)} \\                     
+                     &  \texttt{push(A')} \\                                          
+\end{tabular}
+\end{frame}
+
+\begin{frame}[t,fragile,noframenumbering]{ABA problem}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm,on grid,every state/.style={thick}]
+  \node[state]  (top)               {$top$};
+  \node[state]  (C) [right=of main] {$C$};
+  \node[state]  (A) [above=of E]    {$A$};
+  \node[state]  (B) [right=of E]    {$B$};
+  \node[state]  (N) [right=of B]    {$null$};
+
+  \path[->] (top) [bend right, below] edge  node {} (B);
+  \path[->]
+            (C) edge  node   {} (B)
+            (A) edge  node   {} (C)
+            (B) edge  node   {} (N);
+\end{tikzpicture}
+\end{center} 
+
+\begin{tabular}{p{5cm}p{5cm}}
+Thread 1 & Thread 2 \\
+Start \texttt{pop()} (\texttt{top.CAS(A, B)}) & \\
+Finish \texttt{pop()} &  \texttt{A = pop()} \\
+                     &  \texttt{reclaim(A)} \\
+                     &  \texttt{push(C)} \\                     
+                     &  \texttt{push(A')} \\                                          
+\end{tabular}
+\end{frame}
+
+
+
+\begin{frame}{ABA problem}
+
+ABA problem is always a headache in non-GC languages. 
+
+It still happens in managed languages, be aware.
+
+Advanced algorithms you could or could not use:
 \begin{itemize}
-    \pause \item Help to get "relaxed ordering" \ right
-    \pause \item May be empirically checked against (new version of) hardware
-    \pause \item Minimize "problematic surface" \ of concurrency library
-    \pause \item Could be engineered as cross-platform functions (with different implementations)
-    \pause \item Used to illustrate weak memory model related bug in complicated protocol\footnote<6->{\tiny ... this one bite us hard and scare the \%\$\^\! out of us \url{https://groups.google.com/g/mechanical-sympathy/c/QbmpZxp6C64}}\textsuperscript{,}\footnote<6->{\tiny Fix \url{https://github.com/torvalds/linux/commit/76835b0ebf8a7fe85beb03c75121419a7dec52f0}}
-    \pause \item Could be used to provide non-portable yet highly efficient algorithms\footnote<7->{\tiny Section 4 "Linux x86 SpinLock implementation" \ in \url{https://dl.acm.org/doi/pdf/10.1145/1785414.1785443}}
-    \pause \item Well-studied problem domain
+ \item \texttt{AtomicStampedReference}\footnote{\tiny\url{https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/atomic/AtomicStampedReference.html}}
+ \item immortal memory
+ \item RCU
+ \item reference counting
+ \item other variation of GC
+ \item hazard pointers
+ \item ...
 \end{itemize}
 
 \end{frame}
@@ -1490,303 +1529,126 @@ Litmus tests are basic building blocks to construct reliable concurrent primitiv
 
 \section{Summary}
 
-
 \begin{frame}{Summary}
 
-
-Cache coherency
+Read-Modify-Write atomic operations
 \begin{itemize}
-    \item Cache line: granularity, false sharing, tagging with extra info    
-    \item Cache coherency protocol: states, transitions, message passing, coherency
+ \item \texttt{getAndSet}, \texttt{getAndAdd} -- consensus number \textbf{2}
+ \item \texttt{compareAndSet}, \texttt{compareAndExchange} -- consensus number $\infty$
 \end{itemize}
 
-Hardware optimizations
+Spin locks
 \begin{itemize}
-    \item Store buffering, Load buffering, Invalidate Queues, Interconnect topology
+  \item Test-and-set
+  \item Test-and-test-and-set
+  \item Exponential Backoff
 \end{itemize}
 
-Hardware memory model
+Memory hierarchy
 \begin{itemize}
-    \item Reorderings of memory operations on independent memory locations
-    \item Weak (relaxed) consistency
+  \item Multi-level caching
+  \item Cache coherence via replication and message passing
+  \item Invalidation storm  
 \end{itemize}
 
-Memory barriers
-\begin{itemize}
-    \item Architecture-specific, Affect local CPU only, Different kinds
-    \item \texttt{\{Store,Load\}\_\{Store,Load\}} taxonomy
-\end{itemize}
-
-Litmus tests
-\begin{itemize}
-    \item Basic blocks for many key concurrent algorithms
-    \item Empirical approach to building reliable concurrent software    
-\end{itemize}
+Lock-free stack and ABA for pooling.
 
 \end{frame}
-
 
 \begin{frame}{Summary: homework}
-
-"Is Parallel Programming Hard, And, If So, What Can You Do About It" \ (perfbook) 
-
-Appendix B "Why Memory Barriers?"
-
-\begin{itemize}
-    \item section B.1 ''Cache Structure''. Be ready to draw and explain what is associative hardware cache.
-    \item section B.2.4 ''MESI Protocol Example''
-\end{itemize}
-
+  \texttt{Lecture \thisLectureNum, Tasks \thisLectureNum.*:} {\tiny\url{https://github.com/Svazars/parallel-programming/blob/main/hw/block2}}
 \end{frame}
 
 
-
-% \begin{frame}{Caches}
+% \begin{frame}{Ticket lock}
 % 
-% 1 cpu -- 1 cache + global memory
+% now we need fairness and trivial atomic impl
 % 
-% challenges: 
-    % modified, how others will see
-    % need to read -- from where?
-    % need to write -- to which instance (local or remote?)
+% conclusion: not good but we implemented it with fetch-and-inc (consensu=2), not with cAS (consensu=inf)
 % 
-% main requirements (informal)
-    % per-cpu consistency
-    % per-memory cell consistency
-    % no-out-of-thin-air values (atomicity)
-    % some "reasonable" causality (more on this later)
+% So now you know the IDEAS:
+% peterson lock (2 threads, 2 regs)
+% FIlter lock (N thread, N regs)
+% Ticket lock (inf thread, f-and-add)
+% TATAS lock (inf thread, CAS)
 % 
-% further reading: formal definition etc
-% 
-% \end{frame}
-% 
-% \begin{frame}{Cache coherency}
-% 
-% protocol that defines
-% 
-% who, when and how should write/read data and resolve "conflicts"
-% 
-% 
-% for efficiency we use
-    % data splitting (cache lines)
-    % replication (severl CPUs may have a copy of main memory cacheline)
-    % ownership (cacheline may be "exclusive" for this thread or read-only etc)
-    % message passing (please transfer me a cahceline, please drop this cacheline as containing out-pf-date data)
-    % asynchrony (I send message, do some stuff, receive answer and continue some stuff)
-% 
-% and that is why we get even MORE strange behaviour
-% 
-% IMPORTANT: as observer, everytihn looks like "operations are reorderd", "operations see out-of-date value", "no causality/transitivety in observed values"
-% the same problem we already seen in compiler reordering but on really low level (even if your compiler is totally dumb)
-% 
-% Our goal here is to get a feeling of different problems and performance implications of h/w design.
-% You MUST not use this models to reason about correctness of programs, NEVER
-% 
-% further reading: serios stuff on h/w mem models, tools, verifiers etc.
-% \end{frame}
-% 
-% \begin{frame}{MESI protocol}
-% 
-% Not so simple, not so complicated
-% 
-% We have:
-    % cachelines with states: semantics
-    % transitions provoked by events (read write ext-message)
-    % message send/receive policy
-% 
-% This protocol is used for illustration purposes, it is not used "as is" in serious h/w.
-% 
-% pictures, few scenarios
-% 
-% 
-% Conclusion:
-    % - replication works, if all read then it scales well
-    % - contention on writes (real sharing), cache size explains "fake" mesasge invocations (false sharing)
-    % - not only operation matters, side effects (triggered event) matter -- bus traffic/bus bandwith issues
-% 
-% some scenarios could be further tweaked, see MESIF as an example. 
-% More states -- more messages and comlicated logic and more bits, but some scenarios could improve
-% 
-% 
-% Ok, so far we already have some strange consistency behaviou (no linearizability granted, but per-cell consistency is ok)
-% Remember how you suffered on various flavours of atomic-registers? Real life is harsh 
-% 
-% \end{frame}
-% 
-% 
-% \begin{frame}{Store buffering}
-% 
-% Ok, we have some serious improvement on performance and scalability but our operations still need to be committed sequentially and we await a lot
-% 
-% what if we have some buffer of "operations to be done" and somehow do tasks "in parrallel" ?
-% 
-% Store buffer
-% 
-% Few caveats:
-    % same location ops must be ordered or even joined
-    % same location read-writes must be consistenct, stor-to-load buffering
-% 
-% This stuff now misbehaves on independent locations, we start to loose "transitivity" (and sanity).
-% 
-% And yes, you could observe it on modern intel/amd processors: see
-% 
-% 
-% Sometime you need to "enforce" ordering, then use special CPU instruction "memory barrier".
-% Incorrect but understandable definition "flush the buffer".
-% Incorrect but "generic" definition: "forbid reordering of load and stores around this place in code"
-% Incorrect but "mathematical" definition: add special "happens-before, proveds-afte, promising-inter" edges in concurency graph
-% 
-% Here you have seen approaches to h/w memory models:
-% - operational
-% - denotational
-% - TODO
-% 
-% I intentioanlly use state-machine based explanation with diagrams and particular scenarios. It never helps to prove anything about code but could explain bugs/inconsistent behaviour. You should % understand it is "dangerous" stuff but not magic, just series of performance tradeoffs
-% 
-% further reading: habr
-% 
-% \end{frame}
-% 
-% \begin{frame}{Invalidation queue}
-% 
-% Ok, we traded "logical execution" in some scenarios (which were still possible to explain by compielr optimization for instrance) for better throughput
-% what else is limiting our protocol?
-% 
-% awaiting confirmation from other cpu
-% 
-% lets use invalidation queue
-% 
-% diagram
-% 
-% even more subtle for correctness 
-% 
-% discuss few scenarios and problems
-% 
-% we need yet another memory barrier
-% 
-% \end{frame}
-% 
-% \begin{frame}{Note on memory barriers}
-% 
-% in general they are CPU specific instructions we some CPU specific semantics
-% 
-% but could be classified in classical
-% StorStore/...
-% 
-% Golden RULE:
-% abundant barriers on one side do not guarantee correctness on other side, for proper comunication you need barriers (or other sync ops) on both sides
-% 
-% You should not think
-% SL\_SL barrier publishes everthing and now it is visible
-% or atomic.sseqcst in C++ or volatile in Java or Atomic in Java
-% 
-% any commujnication is 2-way process (send message, receive message)
-% 
-% \end{frame}
-% 
-% \begin{frame}{Load buffer}
-% 
-% Ok, speeding up stuff. Lets buffer independent loads
-% 
-% diagram
-% 
-% even more comlicated scenario
-% 
-% yes indeed it happens on arm64, see litmus
-% 
-% but buys us simplicity/perfomance/energy efficiency
-% 
-% \end{frame}
-% 
-% \begin{frame}{Cache topology}
-% 
-% By the way, how information about cahe state is moved around
-% physically, over wire
-% but who sends to whom
-% 
-% diagram with single arbiter
-% diagram with n-way topology
-% 
-% here are scenario that also illustrate some strange "transitivity violation"
-% 
-% \end{frame}
-
-% \begin{frame}{Hardware is evolving}
-% 
-% new cache coherency protocols will appear
-% new modules (buffers, reorders, predictors, queues ...) will appear
-% topology and rules of memory bus functioning will change
-% 
-% so this "operational view" illustrtion is already outdated.
-% 
-% But key points are:
-% - replication indeed works and may be a game changer in scalability/performance
-% - reorderings are possible and happen all the time, no matter bacuase of compiler or hardawre or memory bus specific
-% 
-% You need to know how to tame the beast.
-% 
-% Evil way (knut):
-% - memory barriers
-% - syncing atomic operations
-% 
-% Good way (prianik)
-% - thread- or cpu-specific data
-% - read-mostly applications
-% 
-% Rule of thumb: if you are desperately getting "yet one more clock cycle" by using ultra-advanced concurrent algorithm with "on-the-edge" weakest-allowed memory-barriers
-% maybe you are solving the task wrong way
-% 
-% - it is hard to validate
-% - it is hard to maintain
-% - it is very h/w specific and will be outdated soon
-% 
-% In some sense, you are great multicore developer if you are not using 2/3 of this course in production code
-% 
-% Unfortunately, personal experience of many cool concurrency experts shows that first you need to learn hard stuff and spend (A LOT OF) time debugging it
+% TODO: lecTODO will add queue-based lock ieas to your arsenal
 % 
 % \end{frame}
 
 
-% \begin{frame}{Hardware memory model}
 % 
-% All this operational stuff and scenario anecdotes are cool but they indeed do not help us to prove programs are OK
+% \begin{frame}{Lock free data structures}
 % 
-% And processor manuals are also hard to interpret in terms of concurrent code.
-% What should we do?
+% we have atomics, may try to prifduce something more interesting in terms of progress guarantes (wait free , lock free,  obstruct free )
 % 
+% even cocncurrent sigle linked lists are CHAPTERS of dedicated books, imagine literature on
+% - diuble-link lists
+% - queue
+% - hash tables
+% - sets
+% - trees
+% etc
 % 
-% Answer #1: mathematics!
-% Use formalism to describe properties, orderings, guarantees and then prove comlicated propositions of assembly snippets
-% 
-% See introduction to relaxed memoty models
-% see adve
-% 
-% Pros: real math
-% Cons: not for daily use
-% 
-% Answer #2: reuse!
-% somebody implemts mutex for you and you just use it as is. maube author even proves some stuff about the code
-% Pros: i tried to teach you this way in block1
-% Cons: how to develop custom algos?
-% 
-% further reading: how they optimized spin lock on x86 for linux by removing some barrier
-% 
-% Answer #3: litmus tests!
-% you write small snippets about communication between threads, ensure they work as intended and build algos of this small briks
-% Pros: flexible
-% Cons: need deep knowledge of caveats, time conusming, suboptimal
-% 
-% Please read about taxonomy of tests, use special software to study this.
-% 
-% Warning:
-%     there are well established hardware memory models for differnt archs
-%         but they still find "imprecisions" there (russ cox link about arm-whatever)
-%     under these models is possible to prove behaviour of moderate asm snippets
-%         - not large chinks
-%         - not high level code (becase verifying compiler optimizations agains memory model is other story) 
+% To SIMPLIFY we will use GC-assisted language (no mem corrutp, no use after free, no object identity ABA)
 % 
 % \end{frame}
-
+% 
+% 
+% \begin{frame}{Queus}
+% taxonomy
+  % MPSC MPPC ...
+  % wait-free lock free
+  % bounded unbounded
+% 
+% 
+% SEE 1000cores vjukov
+% 
+% we will discuss few samples
+% 
+% \end{frame}
+% 
+% \begin{frame}{wait-free SPSC}
+% 
+% bounded?
+% 
+% \end{frame}
+% 
+% 
+% \begin{frame}{unbound lock free MPMC}
+% 
+% \end{frame}
+% 
+% 
+% \begin{frame}{unbound lock free MPMC}
+% adding lock-free free list for memory management
+% 
+% and woo hoo cerash
+% 
+% 
+% CONCLUSION: you are not ready for concurrency in unmanaged languages
+% at all
+% 
+% adding stamps/markers, wrapping stamps etc
+% 
+% Further reading: marked pointers, colored pinters, hazard pointers
+% 
+% \end{frame}
+% 
+% 
+% \begin{frame}{unexplained real life phenomena}
+% 
+% Cahe contetntion and mem bus traffix 
+ % false sharing
+ % real sharing
+% 
+% visibility issues
+% - variations of atomics (seq-cst, relazed)
+% - variation of filed (USUAL, FINAL, VOLATILE)
+% 
+% We need to go deeper and talk a few words on processor level (highest level of abstraction, by the way)
+% 
+% \end{frame}
 
 
 \end{document}
