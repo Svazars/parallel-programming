@@ -1,8 +1,10 @@
 \input{../../common/slide-common-header.tex}
 \input{../../common/slide-plan.tex}
 
+\newcommand{\thisLectureNum}{\advancedConcurrencyNum}
 
-\title[]{Lecture \advancedConcurrencyNum: \advancedConcurrencyTopic}
+
+\title[]{Lecture \thisLectureNum: \advancedConcurrencyTopic}
 \subtitle[]{\advancedConcurrencyKey}
 \author[]{Alexander Filatov\\ filatovaur@gmail.com}
 
@@ -12,7 +14,7 @@
 
 \begin{frame}
   \titlepage
-  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l11.pdf}
+  \url{https://github.com/Svazars/parallel-programming/blob/main/slides/pdf/l\thisLectureNum.pdf}
 \end{frame}
 
 
@@ -291,7 +293,7 @@ Lecture~\atomicsNum
 \end{itemize}
 \end{frame}
 
-\questiontime{What is lock convoy?}
+%\questiontime{What is lock convoy?}
 
 \questiontime{What is thundering herd problem?}
 
@@ -411,7 +413,7 @@ Hint: invalidation storm and quiescence time (Lecture~\atomicsNum)
 \showTOC
 
 
-\begin{frame}{Anderson Queue Lock}
+\begin{frame}[t]{Anderson Queue Lock}
 
 \begin{itemize}
   \item Avoid useless invalidations
@@ -426,7 +428,7 @@ Hint: invalidation storm and quiescence time (Lecture~\atomicsNum)
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Anderson Queue Lock}
+\begin{frame}[t,fragile]{Anderson Queue Lock}
 
 \only<1>{ \begin{center} \includegraphics[width=0.7\textwidth]{./pics/alock/91.png} \end{center} }
 \only<2>{ \begin{center} \includegraphics[width=0.7\textwidth]{./pics/alock/92.png} \end{center} }
@@ -504,6 +506,20 @@ class ALock implements Lock {
 
 \end{frame}
 
+
+\begin{frame}[t]{Memory-oriented algorithm design}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/12.1}}
+\begin{homeworkmail}{Task 12.1}
+    \begin{itemize}      
+      \item Compare two \texttt{barrier} implementations
+      \begin{itemize}      
+          \item Counter based on TATAS lock
+          \item N-element array with \texttt{RUNNING}, \texttt{READY}, \texttt{DONE} state machine
+      \end{itemize}      
+    \end{itemize}
+\end{homeworkmail}
+\end{frame}
 
 \section{Queue-based locks: CLH}
 \showTOC
@@ -610,6 +626,18 @@ class CLHLock implements Lock {
 \end{itemize}
 \end{frame}
 
+
+\begin{frame}[t]{CLH: homework}
+
+{\small\url{https://github.com/Svazars/parallel-programming/tree/main/hw/block2/12.2}}
+\begin{homeworkmail}{Task 12.2}
+    \begin{itemize}      
+      \item \texttt{BadCLHLock} uses local node for spinning which leads to subtle concurrent errors. 
+      \item Find and explain at least one problem in provided source code.
+    \end{itemize}
+\end{homeworkmail}
+
+\end{frame}
 
 \begin{frame}[t]{CLH: locality}
 
@@ -853,7 +881,7 @@ Queue-based locks: can’t just quit
 
 \end{frame}
 
-\begin{frame}{Abortable queue locks: solutions}
+\begin{frame}[t]{Abortable queue locks: solutions}
 
 \begin{itemize}
   \pause
@@ -866,9 +894,6 @@ Queue-based locks: can’t just quit
 
 \pause
 See Section 7.6 "A Queue Lock with Timeouts" \ in "The Art of Multiprocessor Programming" 
-
-\pause
-We will highly appreciate if you will not do THIS in your 3rd critical task
 
 \end{frame}
 
